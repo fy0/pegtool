@@ -14,7 +14,8 @@ import (
 	"golang.org/x/tools/imports"
 
 	"github.com/mna/pigeon/ast"
-	"github.com/mna/pigeon/builder"
+	// "github.com/mna/pigeon/builder"
+	builder_hx "github.com/mna/pigeon/builder_hx"
 )
 
 // exit function mockable for tests
@@ -133,12 +134,12 @@ func main() {
 
 		outBuf := bytes.NewBuffer([]byte{})
 
-		curNmOpt := builder.ReceiverName(*recvrNmFlag)
-		optimizeParser := builder.Optimize(*optimizeParserFlag)
-		basicLatinOptimize := builder.BasicLatinLookupTable(*optimizeBasicLatinFlag)
-		nolintOpt := builder.Nolint(*nolint)
-		leftRecursionSupporter := builder.SupportLeftRecursion(*supportLeftRecursion)
-		if err := builder.BuildParser(
+		curNmOpt := builder_hx.ReceiverName(*recvrNmFlag)
+		optimizeParser := builder_hx.Optimize(*optimizeParserFlag)
+		basicLatinOptimize := builder_hx.BasicLatinLookupTable(*optimizeBasicLatinFlag)
+		nolintOpt := builder_hx.Nolint(*nolint)
+		leftRecursionSupporter := builder_hx.SupportLeftRecursion(*supportLeftRecursion)
+		if err := builder_hx.BuildParser(
 			outBuf, grammar, curNmOpt, optimizeParser, basicLatinOptimize,
 			nolintOpt, leftRecursionSupporter); err != nil {
 			fmt.Fprintln(os.Stderr, "build error: ", err)
@@ -153,20 +154,27 @@ func main() {
 			Fragment:  true,
 		}
 
-		formattedBuf, err := imports.Process("filename", outBuf.Bytes(), options)
-		if err != nil {
+		if outputFlag != nil && strings.HasSuffix(*outputFlag, ".go") {
+			formattedBuf, err := imports.Process("filename", outBuf.Bytes(), options)
+			if err != nil {
+				if _, err := out.Write(outBuf.Bytes()); err != nil {
+					fmt.Fprintln(os.Stderr, "write error: ", err)
+					exit(7)
+				}
+				fmt.Fprintln(os.Stderr, "format error: ", err)
+				exit(6)
+			}
+			if _, err := out.Write(formattedBuf); err != nil {
+				fmt.Fprintln(os.Stderr, "write error: ", err)
+				exit(7)
+			}
+		} else {
 			if _, err := out.Write(outBuf.Bytes()); err != nil {
 				fmt.Fprintln(os.Stderr, "write error: ", err)
 				exit(7)
 			}
-			fmt.Fprintln(os.Stderr, "format error: ", err)
-			exit(6)
 		}
 
-		if _, err := out.Write(formattedBuf); err != nil {
-			fmt.Fprintln(os.Stderr, "write error: ", err)
-			exit(7)
-		}
 	}
 }
 

@@ -152,3 +152,26 @@ The [BSD 3-Clause license][4]. See the LICENSE file.
 [4]: http://opensource.org/licenses/BSD-3-Clause
 [5]: https://github.com/breml
 [6]: https://github.com/mna
+
+### 关于语法修改
+
+准备工作是编译出 bootstrap-pigeon.exe，参考makefile做
+
+想要修改语法：
+
+```
+.\bootstrap-pigeon.exe -o .\pigeon.go  .\grammar\pigeon.peg
+```
+
+想要修改生成的代码：
+
+修改 .\builder\static_code.go 后用这个
+```
+.\static_code_generator.exe .\builder_hx\static_code.go .\builder_hx\generated_static_code.go staticCode
+.\static_code_generator.exe .\builder\static_code.go .\builder\generated_static_code.go staticCode
+```
+
+修改中进行测试：
+```
+go build -ldflags="-s -w" . ;  .\pigeon.exe -nolint  -optimize-parser -o ./a.peg.hx .\a.peg
+```
