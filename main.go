@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/imports"
 
 	"github.com/mna/pigeon/ast"
-	// "github.com/mna/pigeon/builder"
+	builder_go "github.com/mna/pigeon/builder"
 	builder_hx "github.com/mna/pigeon/builder_hx"
 )
 
@@ -53,6 +53,7 @@ func main() {
 		recvrNmFlag            = fs.String("receiver-name", "c", "receiver name for the generated methods")
 		noBuildFlag            = fs.Bool("x", false, "do not build, only parse")
 		supportLeftRecursion   = fs.Bool("support-left-recursion", false, "add support left recursion (EXPERIMENTAL FEATURE)")
+		targetFlag             = fs.String("t", "go", "build target, go or hx")
 
 		altEntrypointsFlag ruleNamesFlag
 	)
@@ -134,16 +135,32 @@ func main() {
 
 		outBuf := bytes.NewBuffer([]byte{})
 
-		curNmOpt := builder_hx.ReceiverName(*recvrNmFlag)
-		optimizeParser := builder_hx.Optimize(*optimizeParserFlag)
-		basicLatinOptimize := builder_hx.BasicLatinLookupTable(*optimizeBasicLatinFlag)
-		nolintOpt := builder_hx.Nolint(*nolint)
-		leftRecursionSupporter := builder_hx.SupportLeftRecursion(*supportLeftRecursion)
-		if err := builder_hx.BuildParser(
-			outBuf, grammar, curNmOpt, optimizeParser, basicLatinOptimize,
-			nolintOpt, leftRecursionSupporter); err != nil {
-			fmt.Fprintln(os.Stderr, "build error: ", err)
-			exit(5)
+		if *targetFlag == "go" {
+			curNmOpt := builder_go.ReceiverName(*recvrNmFlag)
+			optimizeParser := builder_go.Optimize(*optimizeParserFlag)
+			basicLatinOptimize := builder_go.BasicLatinLookupTable(*optimizeBasicLatinFlag)
+			nolintOpt := builder_go.Nolint(*nolint)
+			leftRecursionSupporter := builder_go.SupportLeftRecursion(*supportLeftRecursion)
+			if err := builder_go.BuildParser(
+				outBuf, grammar, curNmOpt, optimizeParser, basicLatinOptimize,
+				nolintOpt, leftRecursionSupporter); err != nil {
+				fmt.Fprintln(os.Stderr, "build error: ", err)
+				exit(5)
+			}
+		}
+
+		if *targetFlag == "hx" {
+			curNmOpt := builder_hx.ReceiverName(*recvrNmFlag)
+			optimizeParser := builder_hx.Optimize(*optimizeParserFlag)
+			basicLatinOptimize := builder_hx.BasicLatinLookupTable(*optimizeBasicLatinFlag)
+			nolintOpt := builder_hx.Nolint(*nolint)
+			leftRecursionSupporter := builder_hx.SupportLeftRecursion(*supportLeftRecursion)
+			if err := builder_hx.BuildParser(
+				outBuf, grammar, curNmOpt, optimizeParser, basicLatinOptimize,
+				nolintOpt, leftRecursionSupporter); err != nil {
+				fmt.Fprintln(os.Stderr, "build error: ", err)
+				exit(5)
+			}
 		}
 
 		// Defaults from golang.org/x/tools/cmd/goimports
@@ -154,7 +171,7 @@ func main() {
 			Fragment:  true,
 		}
 
-		if outputFlag != nil && strings.HasSuffix(*outputFlag, ".go") {
+		if *targetFlag == "go" {
 			formattedBuf, err := imports.Process("filename", outBuf.Bytes(), options)
 			if err != nil {
 				if _, err := out.Write(outBuf.Bytes()); err != nil {
