@@ -233,6 +233,8 @@ typedef Current = {
 	// rolled back by the parser. It is always up to the user to keep this in a
 	// consistent state.
 	var globalStore:StoreDict;
+
+	var data:ParserCustomData;
 }
 
 typedef StoreDict = Map<String, Any>;
@@ -598,6 +600,7 @@ class Parser {
 			state: new StoreDict(),
 			// {{ end }} ==template==
 			globalStore: new StoreDict(),
+			data: new ParserCustomData(),
 		};
 
 		this.maxFailPos = {col: 1, line: 1, offset: 0};
@@ -1627,6 +1630,10 @@ class Parser {
 		this.popV();
 		// whether it matched or not, consider it a match
 		return {val: ret.val, ok: true};
+	}
+
+	public function setCustomData(data:ParserCustomData) {
+		this.cur.data = data;
 	}
 }
 

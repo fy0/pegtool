@@ -233,6 +233,8 @@ type current struct {
 	// rolled back by the parser. It is always up to the user to keep this in a
 	// consistent state.
 	globalStore storeDict
+
+	data *ParserCustomData
 }
 
 type storeDict map[string]any
@@ -445,6 +447,7 @@ func newParser(filename string, b []byte, opts ...Option) *parser {
 			state: make(storeDict),
 			// {{ end }} ==template==
 			globalStore: make(storeDict),
+			data: &ParserCustomData{},
 		},
 		maxFailPos:      position{col: 1, line: 1},
 		maxFailExpected: make([]string, 0, 20),
@@ -459,6 +462,11 @@ func newParser(filename string, b []byte, opts ...Option) *parser {
 	}
 
 	return p
+}
+
+// setCustomData to the parser.
+func (p *parser) setCustomData(data *ParserCustomData) {
+	p.cur.data = data;
 }
 
 // setOptions applies the options to the parser.
