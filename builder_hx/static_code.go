@@ -1,0 +1,1339 @@
+//go:generate go run ../bootstrap/cmd/static_code_generator/main.go -- $GOFILE generated_$GOFILE staticCode
+
+//go:build static_code
+// +build static_code
+
+package builder_hx
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"unicode"
+	"unicode/utf8"
+)
+
+// IMPORTANT: All code below this line is added to the parser as static code
+
+class Errors {
+    public static var errNoRule:Exception = new Exception("grammar has no rule");
+    public static var errInvalidEntrypoint:Exception = new Exception("invalid entrypoint");
+    public static var errInvalidEncoding:Exception = new Exception("invalid encoding");
+    public static var errMaxExprCnt:Exception = new Exception("max number of expressions parsed");
+}
+
+// alternative of Uint64
+typedef Uint64A = UInt;
+typedef RuneA = UInt;
+
+typedef RetValOk = {
+	var val:Any;
+	var ok:Bool;
+}
+
+// Option is a function that can set an option on the parser. It returns
+// the previous setting as an Option.
+// typedef Option = (p:Parser) -> Option; // 注: 这是个函数
+typedef Option = (p:Parser) -> Any; // 注: 这是个函数，因static编译需求返回Any
+
+// ==template== {{ if not .Optimize }}
+// Statistics adds a user provided Stats struct to the parser to allow
+// the user to process the results after the parsing has finished.
+// Also the key for the "no match" counter is set.
+//
+// Example usage:
+//
+//	input := "input"
+//	stats := Stats{}
+//	_, err := Parse("input-file", []byte(input), Statistics(&stats, "no match"))
+//	if err != nil {
+//	    log.Panicln(err)
+//	}
+//	b, err := json.MarshalIndent(stats.ChoiceAltCnt, "", "  ")
+//	if err != nil {
+//	    log.Panicln(err)
+//	}
+//	fmt.Println(string(b))
+function statistics(stats:Stats, choiceNoMatch :String): Option {
+	return function(p :Parser): Option {
+		var oldStats = p.stats;
+		p.stats = stats;
+		var oldChoiceNoMatch = p.choiceNoMatch;
+		p.choiceNoMatch = choiceNoMatch;
+		if (p.stats.ChoiceAltCnt == null) {
+			p.stats.ChoiceAltCnt = new Map<String, Map<String, Int>>();
+		}
+		return statistics(oldStats, oldChoiceNoMatch);
+	}
+}
+
+// Debug creates an Option to set the debug flag to b. When set to true,
+// debugging information is printed to stdout while parsing.
+//
+// The default is false.
+function debug(b:Bool):Option {
+	return function(p:Parser):Option {
+		var old = p.debug;
+		p.debug = b;
+		return debug(old);
+	}
+}
+
+// Memoize creates an Option to set the memoize flag to b. When set to true,
+// the parser will cache all results so each expression is evaluated only
+// once. This guarantees linear parsing time even for pathological cases,
+// at the expense of more memory and slower times for typical cases.
+//
+// The default is false.
+function memoize(b:Bool):Option {
+	return function(p:Parser):Option {
+		var old = p.memoize;
+		p.memoize = b;
+		return memoize(old);
+	}
+}
+
+// {{ end }} ==template==
+
+// position records a position in the text.
+typedef Position = {
+    var line:Int;
+    var col:Int;
+    var offset:Int;
+}
+
+function positionToString(p:Position):String {
+    return '${p.line}:${p.col} [${p.offset}]';
+}
+
+// savepoint stores all state required to go back to this point in the
+// parser.
+typedef Savepoint = {
+    > Position,
+    var rn:RuneA;
+    var w:Int;
+}
+
+function positionClone(x:Position):Position {
+	return {
+		line: x.line,
+		col: x.col,
+		offset: x.offset,
+	};
+}
+
+function savepointClone(x:Savepoint):Savepoint {
+	return {
+		line: x.line,
+		col: x.col,
+		offset: x.offset,
+		rn: x.rn,
+		w: x.w
+	};
+}
+
+typedef Current = {
+	var pos:Position; // start position of the match
+	var text:String; // raw text of the match // []byte
+	var data:ParserCustomData;
+}
+
+enum AllExpr {
+	ActionExpr(e:ActionExpr);
+	AndCodeExpr(e:AndCodeExpr);
+	AndExpr(e:AndExpr);
+	AndLogicalExpr(e:AndLogicalExpr);
+	AnyMatcher(e:AnyMatcher);
+
+	CharClassMatcher(e:CharClassMatcher);
+	ChoiceExpr(e:ChoiceExpr);
+	CodeExpr(e:CodeExpr);
+
+	LabeledExpr(e:LabeledExpr);
+	LitMatcher(e:LitMatcher);
+	NotCodeExpr(e:NotCodeExpr);
+	NotExpr(e:NotExpr);
+	NotLogicalExpr(e:NotLogicalExpr);
+	OneOrMoreExpr(e:OneOrMoreExpr);
+	RecoveryExpr(e:RecoveryExpr);
+	RuleRefExpr(e:RuleRefExpr);
+	// ==template== {{ if .IRefEnable }}
+	RuleIRefExpr(e:RuleIRefExpr);
+	// {{ end }} ==template==
+	SeqExpr(e:SeqExpr);
+	ThrowExpr(e:ThrowExpr);
+	ZeroOrMoreExpr(e:ZeroOrMoreExpr);
+	ZeroOrOneExpr(e:ZeroOrOneExpr);
+}
+
+typedef Grammar = {
+	// ==template== {{ if .SetRulePos }}
+	@:optional var pos:Position;
+	// {{ end }} ==template==
+	var rules:Array<Rule>;
+}
+
+typedef Rule = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var name:String;
+	@:optional var displayName:String;
+	var expr:AllExpr;
+	@:optional var varExists:Bool;
+}
+
+typedef ChoiceExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var alternatives:Array<AllExpr>;
+}
+
+typedef ActionExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var expr:AllExpr;
+	var run:(p:Parser) -> Any;
+}
+
+typedef RecoveryExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var expr:AllExpr;
+	var recoverExpr:AllExpr;
+	var failureLabel:Array<String>;
+}
+
+typedef SeqExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var exprs:Array<AllExpr>;
+}
+
+typedef ThrowExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var label:String;
+}
+
+typedef LabeledExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var label:String;
+	var expr:AllExpr;
+	var textCapture:Bool;
+}
+
+typedef Expr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var expr:AllExpr;
+}
+
+typedef AndExpr = Expr;
+typedef NotExpr = Expr;
+typedef AndLogicalExpr = Expr;
+typedef NotLogicalExpr = Expr;
+typedef ZeroOrOneExpr = Expr;
+typedef ZeroOrMoreExpr = Expr;
+typedef OneOrMoreExpr = Expr;
+
+typedef RuleRefExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var name:String;
+}
+
+// {{ if .IRefEnable }}
+typedef RuleIRefExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var index:Int;
+}
+// {{ end }} ==template==
+
+typedef AndCodeExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var run:(p:Parser) -> Bool;
+}
+
+typedef NotCodeExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var run:(p:Parser) -> Bool;
+}
+
+typedef LitMatcher = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var val:String;
+	var want:String;
+	@:optional var ignoreCase:Bool;
+}
+
+typedef CodeExpr = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var run:(p:Parser) -> Any;
+	var notSkip:Bool;
+}
+
+typedef CharClassMatcher = {
+	// ==template== {{ if .SetRulePos }}
+	var pos:Position;
+	// {{ end }} ==template==
+	var val:String;
+	@:optional var chars:Array<UInt>;
+	@:optional var ranges:Array<UInt>;
+	@:optional var classes:Array<Unicode.RangeTable>;
+	@:optional var ignoreCase:Bool;
+	@:optional var inverted:Bool;
+}
+
+// ==template== {{ if .SetRulePos }}
+typedef AnyMatcher = Position;
+// {{ else }} ==template==
+typedef AnyMatcher = {}
+// {{ end }} ==template==
+
+// errList cumulates the errors found by the parser.
+class ErrList {
+	var lst:Array<ParserError> = [];
+
+	public function add(err:ParserError) {
+		this.lst.push(err);
+	}
+
+	function err():ErrList {
+		if (this.lst.length == 0) {
+			return null;
+		}
+		this.dedupe();
+		return this;
+	}
+
+	public var length(get, null):Int;
+
+	function get_length() {
+		return this.lst.length;
+	}
+
+	function dedupe() {
+		// TODO: 去重
+		// var cleaned []error
+		// set := make(map[string]bool)
+		// for _, err := range *e {
+		// 	if msg := err.Error(); !set[msg] {
+		// 		set[msg] = true
+		// 		cleaned = append(cleaned, err)
+		// 	}
+		// }
+		// *e = cleaned
+	}
+
+	function error():String {
+		switch (this.lst.length) {
+			case 0:
+				return "";
+			case 1:
+				return this.lst[0].Inner.toString();
+			default:
+				var arr = [];
+				for (i in this.lst) {
+					arr.push(i.Inner.toString());
+				}
+				return arr.join('\n');
+		}
+	}
+
+	public function toException():Exception {
+		if (this.lst.length == 0) {
+			return null;
+		}
+		return new Exception(this.err().error());
+	}
+
+	public function new() {}
+}
+
+// parserError wraps an error with a prefix indicating the rule in which
+// the error occurred. The original error is stored in the Inner field.
+typedef ParserError = {
+	var Inner:Exception;
+	var pos:Position;
+	var prefix:String;
+	var expected:Array<String>;
+}
+
+// Error returns the error message.
+function parserErrorError(p:ParserError):String {
+	return p.prefix + ": " + p.Inner.toString();
+}
+
+typedef ResultTuple = {
+	var v:Any;
+	var b:Bool;
+	var end:Savepoint;
+}
+
+var choiceNoMatch = -1; // const
+
+// Stats stores some statistics, gathered during parsing
+typedef Stats = {
+	// ExprCnt counts the number of expressions processed during parsing
+	// This value is compared to the maximum number of expressions allowed
+	// (set by the MaxExpressions option).
+	var ExprCnt: Uint64A;
+
+	// ChoiceAltCnt is used to count for each ordered choice expression,
+	// which alternative is used how may times.
+	// These numbers allow to optimize the order of the ordered choice expression
+	// to increase the performance of the parser
+	//
+	// The outer key of ChoiceAltCnt is composed of the name of the rule as well
+	// as the line and the column of the ordered choice.
+	// The inner key of ChoiceAltCnt is the number (one-based) of the matching alternative.
+	// For each alternative the number of matches are counted. If an ordered choice does not
+	// match, a special counter is incremented. The name of this counter is set with
+	// the parser option Statistics.
+	// For an alternative to be included in ChoiceAltCnt, it has to match at least once.
+	var ChoiceAltCnt: Map<String, Map<String, Int>>;
+}
+
+class Parser {
+	public var filename:String;
+	public var pt:Savepoint;
+	public var cur:Current;
+
+	public var data:String;
+	public var errs = new ErrList(); // x *errList
+
+	public var depth:Int;
+	public var recover:Bool;
+	// ==template== {{ if not .Optimize }}
+	public var debug:Bool;
+
+	public var memoize:Bool;
+	// {{ end }} ==template==
+	// ==template== {{ if not .Optimize }}
+	// memoization table for the packrat algorithm:
+	// map[offset in source] map[expression or rule] {value, match}
+	public var memo:Map<Int, Map<Any, ResultTuple>>; // map[int]map[any]resultTuple
+
+	// {{ end }} ==template==
+	// rules table, maps the rule identifier to the rule node
+	public var rules:Map<String, Rule>;
+	public var rulesArray:Array<Rule>;
+	// variables stack, map of label to value
+	public var vstack = new GenericStack<Map<String, Any>>();
+	// rule stack, allows identification of the current rule in errors
+	public var rstack = new GenericStack<Rule>();
+
+	// parse fail
+	public var maxFailPos:Position;
+	public var maxFailExpected:Array<String>;
+	public var maxFailInvertExpected:Bool = false;
+
+	// max number of expressions to be parsed
+	public var maxExprCnt:Uint64A;
+	// entrypoint for the parser
+	public var entrypoint:String;
+
+	public var allowInvalidUTF8:Bool;
+
+	// *Stats
+	public var stats:Stats;
+
+	public var choiceNoMatch:String;
+	// recovery expression stack, keeps track of the currently available recovery expression, these are traversed in reverse
+	public var recoveryStack = new GenericStack<Map<String, Any>>();
+
+	public var _errPos: Position;
+	// skip code stack
+	public var scStack = new GenericStack<Bool>();
+	// save point stack
+	// public var spStack = new GenericStack<Savepoint>();
+
+	// newParser creates a parser with the specified input source and options.
+	public function new(filename:String, b:String, opts:Array<Option>) {
+		var stats:Stats = {
+			ExprCnt: 0,
+			ChoiceAltCnt: new Map<String, Map<String, Int>>(),
+		}
+
+		this.filename = filename;
+		this.data = b;
+		this.pt = {
+			line: 1,
+			col: 0,
+			offset: 0,
+			rn: 0,
+			w: 0,
+		};
+		this.recover = true;
+		this.cur = {
+			pos: {line: 0, col: 0, offset: 0},
+			text: null,
+			data: new ParserCustomData(),
+		};
+
+		this.maxFailPos = {col: 1, line: 1, offset: 0};
+		this.maxFailExpected = []; // make([]string, 0, 20),
+		this.stats = stats;
+		// start rule is rule [0] unless an alternate entrypoint is specified
+		this.entrypoint = "{{ .Entrypoint }}";
+
+		// p.spStack.init(5)
+		this.setOptions(opts);
+
+		if (this.maxExprCnt == 0) {
+			this.maxExprCnt = 2147483647; // p.maxExprCnt = 2147483647;
+		}
+	}
+
+	// setOptions applies the options to the parser.
+	function setOptions(opts:Array<Option>) {
+		for (opt in opts) {
+			opt(this);
+		}
+	}
+
+	// setCustomData to the parser.
+	function setCustomData(data:ParserCustomData) {
+		this.cur.data = data;
+	}
+
+	// setCustomData to the parser.
+	function checkSkipCode():Bool {
+		return this.scStack.first();
+	}
+
+	// push a variable set on the vstack.
+	function pushV() {
+		this.vstack.add(new Map());
+	}
+
+	// pop a variable set from the vstack.
+	function popV() {
+		this.vstack.pop();
+	}
+
+	// push a recovery expression with its labels to the recoveryStack
+	function pushRecovery(labels:Array<String>, expr:Any) {
+		var m = new Map<String, Any>();
+		// m := make(map[string]any, len(labels))
+		for (fl in labels) {
+			m[fl] = expr;
+		}
+		this.recoveryStack.add(m);
+	}
+
+	// pop a recovery expression from the recoveryStack
+	function popRecovery() {
+		this.recoveryStack.pop();
+	}
+
+	// ==template== {{ if not .Optimize }}
+	function print(prefix:String, s:String):String {
+		if (!this.debug) {
+			return s;
+		}
+		trace('${prefix} ${this.pt.line}:${this.pt.col}:${this.pt.offset}: ${s} [${this.pt.rn}]');
+		// fmt.Printf("%s %d:%d:%d: %s [%#U]\n", prefix, p.pt.line, p.pt.col, p.pt.offset, s, p.pt.rn)
+		return s;
+	}
+
+	function printIndent(mark:String, s:String):String {
+		// return this.print(strings.Repeat(" ", p.depth)+mark, s)
+		return this.print(StringTools.lpad('', ' ', this.depth), s);
+	}
+
+	function in_(s:String):String {
+		var res = this.printIndent(">", s);
+		this.depth++;
+		return res;
+	}
+
+	function out(s:String):String {
+		this.depth--;
+		return this.printIndent("<", s);
+	}
+	// {{ end }} ==template==
+
+	public function addErr(err:Exception) {
+		// p.addErrAt(err, p.pt.position,[])
+		this.addErrAt(err, this.pt, []);
+	}
+
+	public function addErrAt(err:Exception, pos:Position, expected:Array<String>) {
+		var buf = new BytesBuffer();
+		if (this.filename != "") {
+			buf.addString(this.filename);
+		}
+		// if buf.Len() > 0 { 不确定
+		if (buf.length > 0) {
+			buf.addString(':');
+		}
+		// buf.WriteString(fmt.Sprintf("%d:%d (%d)", pos.line, pos.col, pos.offset))
+		buf.addString('${pos.line}:${pos.col} (${pos.offset})');
+		if (this.rstack.first() != null) {
+			if (buf.length > 0) {
+				buf.addString(": ");
+			}
+			var rule = this.rstack.first();
+			if (rule.displayName != "") {
+				buf.addString("rule " + rule.displayName);
+			} else {
+				buf.addString("rule " + rule.name);
+			}
+		}
+		// pe := &parserError{Inner: err, pos: pos, prefix: buf.String(), expected: expected}
+		// p.errs.add(pe)
+		this.errs.add({
+			Inner: err,
+			pos: pos,
+			prefix: buf.getBytes().toString(),
+			expected: expected,
+		});
+	}
+
+	function failAt(fail:Bool, pos:Position, want:String) {
+		// process fail if parsing fails and not inverted or parsing succeeds and invert is set
+		if (fail == this.maxFailInvertExpected) {
+			if (pos.offset < this.maxFailPos.offset) {
+				return;
+			}
+
+			if (pos.offset > this.maxFailPos.offset) {
+				this.maxFailPos = pos;
+				// p.maxFailExpected = p.maxFailExpected[:0]
+				this.maxFailExpected = [];
+			}
+
+			if (this.maxFailInvertExpected) {
+				want = "!" + want;
+			}
+			this.maxFailExpected.push(want);
+		}
+	}
+
+	// read advances the parser to the next rune.
+	function read() {
+		this.pt.offset += this.pt.w;
+		// rn, n := utf8.DecodeRune(p.data[p.pt.offset:])
+		// p.pt.rn = rn
+		// p.pt.w = n
+		// p.pt.col++
+		var rn = this.data.charAt(this.pt.offset);
+		var rnB = Bytes.ofString(rn);
+        var _rnInt = rn.charCodeAt(0);
+		this.pt.rn = _rnInt != null ? _rnInt : 0; // static compile requires !null
+		this.pt.w = rnB.length;
+		this.pt.col ++;
+
+		// if rn == '\n' {
+        if (rn == '\n') {
+            this.pt.line++;
+            this.pt.col = 0;
+        }
+
+		// TODO 需要重做，rn为空不代表utf8的invalid
+        // if (rn == '') {
+        //     if (!this.allowInvalidUTF8) {
+        //         this.addErr(Errors.errInvalidEncoding);
+        //     }
+        // }
+	}
+
+	// restore parser position to the savepoint pt.
+	function restore(pt:Savepoint) {
+		if (pt.offset == this.pt.offset) {
+			// ==template== {{ if not .Optimize }}
+			if (this.debug) {
+				this.out(this.in_("restore"));
+			}
+			// {{ end }} ==template==
+			return;
+		}
+		this.pt = pt;
+		// ==template== {{ if not .Optimize }}
+		if (this.debug) {
+			this.out(this.in_("restore"));
+		}
+		// {{ end }} ==template==
+	}
+
+	function sliceFrom(start:Savepoint):String {
+		// return p.data[start.position.offset:p.pt.position.offset]
+		return this.data.substring(start.offset, this.pt.offset);
+	}
+
+	function sliceFromOffset(offset:Int):String {
+		return this.data.substring(offset, this.pt.offset);
+	}
+
+	// ==template== {{ if not .Optimize }}
+	function getMemoized(node:Any):{result:ResultTuple, ok:Bool} {
+		var m = this.memo[this.pt.offset];
+
+		if (m != null) {
+			var m2 = m[node];
+			if (m2 != null) {
+				return {
+					result: m2,
+					ok: true,
+				}
+			}
+		}
+
+		return {
+			// ResultTuple{v:null, b: false, end: null}
+			result: null,
+			ok: false,
+		}
+	}
+
+	function setMemoized(pt:Savepoint, node:Any, tuple:ResultTuple) {
+		if (this.memo == null) {
+			this.memo = new Map<Int, Map<Any, ResultTuple>>();
+		}
+		var m = this.memo[pt.offset];
+		if (m == null) {
+			m = new Map<Any, ResultTuple>();
+			this.memo[pt.offset] = m;
+		}
+		m[node] = tuple;
+	}
+	// {{ end }} ==template==
+
+	public function buildRulesTable(g:Grammar):Void {
+		this.rules = new Map<String, Rule>();
+		for (r in g.rules) {
+			this.rules[r.name] = r;
+		}
+	}
+
+	public function parse(grammar:Grammar):Any {
+		if (grammar == null) {
+			grammar = {{ .GrammarVarName }};
+		}
+		if (grammar.rules.length == 0) {
+			this.addErr(Errors.errNoRule);
+			throw this.errs.toException();
+		}
+
+		this.rulesArray = grammar.rules;
+		this.buildRulesTable(grammar);
+		// var recoverDefer = () -> {};
+
+		if (this.recover) {
+			// panic can be used in action code to stop parsing immediately
+			// and return the panic as an error.
+		}
+
+		var startRule = this.rules[this.entrypoint];
+
+		if (startRule == null) {
+			this.addErr(Errors.errInvalidEntrypoint);
+			// return nil, p.errs.err()
+			throw this.errs.toException();
+		}
+
+		var ret:RetValOk = {val: null, ok: false};
+
+		try {
+			this.read(); // advance to first rune
+			ret = this.parseRuleWrap(startRule);
+		} catch (e:haxe.Exception) {
+			// ==template== {{ if not .Optimize }}
+			// if p.debug {
+			// 	defer p.out(p.in("panic handler"))
+			// }
+			// {{ end }} ==template==
+			// switch e := e.(type) {
+			// case error:
+			this.addErr(e);
+			// default:
+			// 	p.addErr(fmt.Errorf("%v", e))
+			// }
+			throw this.errs.toException();
+		}
+
+		if (!ret.ok) {
+			if (this.errs.length == 0) {
+				// If parsing fails, but no errors have been recorded, the expected values
+				// for the farthest parser position are returned as error.
+				var maxFailExpectedMap = new Map<String, Any>();
+				for (v in this.maxFailExpected) {
+					// maxFailExpectedMap[v] = struct{}{}
+					maxFailExpectedMap[v] = {};
+				}
+
+				var expected = [];
+				var eof = false;
+				if (maxFailExpectedMap["!."] != null) {
+					// delete(maxFailExpectedMap, "!.")
+					maxFailExpectedMap.remove("!.");
+					eof = true;
+				}
+				for (k in maxFailExpectedMap.keys()) {
+					expected.push(k);
+				}
+
+				// sort.Strings(expected)
+				expected.sort((a, b) -> a > b ? 1 : -1);
+
+				if (eof) {
+					expected.push("EOF");
+				}
+				// p.addErrAt(errors.New("no match found, expected: " + listJoin(expected, ", ", "or")), p.maxFailPos, expected)
+				this.addErrAt(new Exception("no match found, expected: " + listJoin(expected, ", ", "or")), this.maxFailPos, expected);
+			}
+			throw this.errs.toException();
+		}
+
+		// return val, p.errs.err()
+		if (this.errs.length != 0) {
+			throw this.errs.toException();
+		}
+		return ret.val;
+	}
+
+	// ==template== {{ if not .Optimize }}
+	function parseRuleMemoize(rule:Rule):RetValOk {
+		var ret = this.getMemoized(rule); // ResultTuple
+		if (ret.ok) {
+			this.restore(ret.result.end);
+			return {
+				val: ret.result.v,
+				ok: ret.result.b,
+			}
+		}
+
+		var startMark = this.pt; // TODO: 这里需要值拷贝吗
+		var ret2 = this.parseRule(rule);
+		this.setMemoized(startMark, rule, {v: ret2.val, b: ret2.ok, end: this.pt});
+
+		return ret2;
+	}
+	// {{ end }} ==template==
+
+	// ==template== {{ if .NeedExprWrap }}
+	function parseRuleWrap(rule:Rule):RetValOk {
+		// ==template== {{ if not .Optimize }}
+		// if p.debug {
+		//     defer p.out(p.in("parseRule " + rule.name))
+		// }
+		// {{ end }} ==template==
+		var ret:RetValOk = {val: null, ok: false};
+
+		// ==template== {{ if not .Optimize }}
+		var startMark = this.pt;
+		// {{ end }} ==template==
+
+		// {{ if not .Optimize }}
+		if (this.memoize) {
+			ret = this.parseRuleMemoize(rule);
+		} else {
+			ret = this.parseRule(rule);
+		}
+		// {{ else }}
+		ret = this.parseRule(rule);
+		// {{ end }} ==template==
+
+		// ==template== {{ if not .Optimize }}
+		if (ret.ok && this.debug) {
+			this.printIndent("MATCH", this.sliceFrom(startMark));
+		}
+		// {{ end }} ==template==
+		return ret;
+	}
+
+	function parseRule(rule:Rule):RetValOk {
+		if (rule.varExists && !this.checkSkipCode()) {
+			this.rstack.add(rule);
+			this.pushV();
+			var ret = this.parseExprWrap(rule.expr);
+			this.popV();	
+			this.rstack.pop();
+			return ret;
+		} else {
+			this.rstack.add(rule);
+			var ret = this.parseExprWrap(rule.expr);
+			this.rstack.pop();
+			return ret;
+		}
+	}
+
+	// {{ else }}
+	function parseRuleWrap(rule:Rule):RetValOk {
+		if (rule.varExists && !this.checkSkipCode()) {
+			this.rstack.add(rule);
+			this.pushV();
+			var ret = this.parseExprWrap(rule.expr);
+			this.popV();	
+			this.rstack.pop();
+			return ret;
+		} else {
+			this.rstack.add(rule);
+			var ret = this.parseExprWrap(rule.expr);
+			this.rstack.pop();
+			return ret;
+		}
+	}
+	// {{ end }} ==template==
+
+	// ==template== {{ if .NeedExprWrap }}
+	function parseExprWrap(expr:AllExpr):RetValOk {
+		// ==template== {{ if not .Optimize }}
+		var pt:Savepoint = {
+			line: 0,
+			col: 0,
+			offset: 0,
+			rn: 0,
+			w: 0
+		};
+		// {{ end }} ==template==
+
+		var ret = this.parseExpr(expr);
+
+		// ==template== {{ if not .Optimize }}
+		if (this.memoize) {
+			// this.setMemoized(pt, expr, resultTuple{val, ok, p.pt})
+			this.setMemoized(pt, expr, {v: ret.val, b: ret.ok, end: this.pt});
+		}
+		// {{ end }} ==template==
+		return ret;
+	}
+	// {{ end }} ==template==
+
+	function {{ .ParseExprName }}(expr:AllExpr):RetValOk {
+		this.stats.ExprCnt++;
+		if (this.stats.ExprCnt > this.maxExprCnt) {
+			throw Errors.errMaxExprCnt;
+		}
+
+		var ret:RetValOk;
+
+		switch (expr) {
+			case ActionExpr(expr):
+				ret = this.parseActionExpr(expr);
+			case AndCodeExpr(expr):
+				ret = this.parseAndCodeExpr(expr);
+			case AndExpr(expr):
+				ret = this.parseAndExpr(expr);
+			case AndLogicalExpr(expr):
+				ret = this.parseAndLogicalExpr(expr);
+			case AnyMatcher(expr):
+				ret = this.parseAnyMatcher(expr);
+			case CharClassMatcher(expr):
+				ret = this.parseCharClassMatcher(expr);
+			case ChoiceExpr(expr):
+				ret = this.parseChoiceExpr(expr);
+			case CodeExpr(expr):
+				ret = this.parseCodeExpr(expr);
+			case LabeledExpr(expr):
+				ret = this.parseLabeledExpr(expr);
+			case LitMatcher(expr):
+				ret = this.parseLitMatcher(expr);
+			case NotCodeExpr(expr):
+				ret = this.parseNotCodeExpr(expr);
+			case NotExpr(expr):
+				ret = this.parseNotExpr(expr);
+			case NotLogicalExpr(expr):
+				ret = this.parseNotLogicalExpr(expr);
+			case OneOrMoreExpr(expr):
+				ret = this.parseOneOrMoreExpr(expr);
+			case RecoveryExpr(expr):
+				ret = this.parseRecoveryExpr(expr);
+			case RuleRefExpr(expr):
+				ret = this.parseRuleRefExpr(expr);
+			// ==template== {{ if .IRefEnable }}
+			case RuleIRefExpr(expr):
+				ret = p.parseRuleIRefExpr(expr)
+			// {{ end }} ==template==
+			case SeqExpr(expr):
+				ret = this.parseSeqExpr(expr);
+			case ThrowExpr(expr):
+				ret = this.parseThrowExpr(expr);
+			case ZeroOrMoreExpr(expr):
+				ret = this.parseZeroOrMoreExpr(expr);
+			case ZeroOrOneExpr(expr):
+				ret = this.parseZeroOrOneExpr(expr);
+			default:
+				throw new Exception("unknown expression type");
+				// panic(fmt.Sprintf("unknown expression type %T", expr))
+		}
+		return ret;
+	}
+
+	function parseActionExpr(act:ActionExpr):RetValOk {
+		if (this.checkSkipCode()) {
+			var ret = this.parseExprWrap(act.expr);
+			return { val:null, ok: ret.ok };
+		}
+
+		var start = savepointClone(this.pt);
+		var ret = this.parseExprWrap(act.expr);
+		if (ret.ok) {
+			// this.cur.pos = start.position;
+			this.cur.pos = positionClone(start);
+			this.cur.text = this.sliceFrom(start);
+			this._errPos = start;
+			var val = act.run(this);
+			this._errPos = null;
+			ret.val = val;
+		}
+		// ==template== {{ if not .Optimize }}
+		if (ret.ok && this.debug) {
+			this.printIndent("MATCH", this.sliceFrom(start));
+		}
+		// {{ end }} ==template==
+		return ret;
+	}
+
+	function parseAndCodeExpr(and:AndCodeExpr):RetValOk {
+		var ok = and.run(this);
+		return {val: null, ok: ok};
+	}
+
+	function parseAndExpr(and:AndExpr):RetValOk {
+		return this.parseAndExprBase(and, false);
+	}
+
+	function parseAndLogicalExpr(and:AndExpr):RetValOk {
+		return this.parseAndExprBase(and, true);
+	}
+
+	function parseAndExprBase(and:AndExpr, logical:Bool):RetValOk {
+		var pt = this.pt;
+
+		this.scStack.add(true);
+		var ret = this.parseExprWrap(and.expr);
+		this.scStack.pop();
+
+		var matchedOffset = this.pt.offset;
+		this.restore(pt);
+
+		if (logical) {
+			return {val: null, ok: ret.ok && this.pt.offset != matchedOffset}
+		}
+		return {val: null, ok: ret.ok};
+	}
+
+	function parseAnyMatcher(act:AnyMatcher):RetValOk {
+		// if p.pt.rn == utf8.RuneError && p.pt.w == 0 {
+		if (this.pt.rn == 0 && this.pt.w == 0) {
+			// EOF - see utf8.DecodeRune
+			this.failAt(false, this.pt, ".");
+			return {val: null, ok: false};
+		}
+		this.failAt(true, this.pt, ".");
+		this.read();
+		return {val: null, ok: true};
+	}
+
+	function parseCharClassMatcher(chr:CharClassMatcher):RetValOk {
+		var cur = this.pt.rn;
+
+		// can't match EOF
+		if (cur == 0 && this.pt.w == 0) { // see utf8.DecodeRune
+			this.failAt(false, this.pt, chr.val);
+			return {val: null, ok: false};
+		}
+
+		if (chr.ignoreCase) {
+			cur = String.fromCharCode(cur).toLowerCase().charCodeAt(0);
+		}
+
+		if (chr.chars != null) {
+			// try to match in the list of available chars
+			for (rn in chr.chars) {
+				if (rn == cur) {
+					if (chr.inverted) {
+						this.failAt(false, this.pt, chr.val);
+						return {val: null, ok: false};
+					}
+					this.failAt(true, this.pt, chr.val);
+					this.read();
+					return {val: null, ok: true};
+				}
+			}
+		}
+
+		if (chr.ranges != null) {
+			// try to match in the list of ranges
+			for (i in 0...chr.ranges.length) {
+				if (i % 2 != 0)
+					continue;
+				if (cur >= chr.ranges[i] && cur <= chr.ranges[i + 1]) {
+					if (chr.inverted) {
+						this.failAt(false, this.pt, chr.val);
+						return {val: null, ok: false};
+					}
+					this.failAt(true, this.pt, chr.val);
+					this.read();
+					return {val: null, ok: true};
+				}
+			}
+		}
+
+		// try to match in the list of Unicode classes
+		if (chr.classes != null) {
+			for (cl in chr.classes) {
+				if (Unicode.Is(cl, cur)) {
+					if (chr.inverted) {
+						this.failAt(false, this.pt, chr.val);
+						return {val: null, ok: false};
+					}
+					this.failAt(true, this.pt, chr.val);
+					this.read();
+					return {val: null, ok: true};
+				}
+			}
+		}
+
+		if (chr.inverted) {
+			this.failAt(true, this.pt, chr.val);
+			this.read();
+			return {val: null, ok: true};
+		}
+		this.failAt(true, this.pt, chr.val);
+		return {val: null, ok: false};
+	}
+
+	// ==template== {{ if not .Optimize }}
+	function incChoiceAltCnt(ch:ChoiceExpr, altI:Int) {
+		// choiceIdent := fmt.Sprintf("%s %d:%d", p.rstack.first().name, ch.pos.line, ch.pos.col)
+		var choiceIdent:String = '${this.rstack.first().name}';
+
+		var m = this.stats.ChoiceAltCnt[choiceIdent];
+		if (m == null) {
+			m = new Map<String, Int>();
+			this.stats.ChoiceAltCnt[choiceIdent] = m;
+		}
+		// We increment altI by 1, so the keys do not start at 0
+		var alt:String = Std.string(altI + 1);
+		if (altI == _choiceNoMatch) {
+			alt = this.choiceNoMatch;
+		}
+		m[alt]++;
+	}
+	// {{ end }} ==template==
+
+	function parseChoiceExpr(ch:ChoiceExpr):RetValOk {
+		// for altI, alt := range ch.alternatives {
+		for (altI in 0...ch.alternatives.length) {
+			var alt = ch.alternatives[altI];
+
+			var ret = this.parseExprWrap(alt);
+			if (ret.ok) {
+				// ==template== {{ if not .Optimize }}
+				this.incChoiceAltCnt(ch, altI);
+				// {{ end }} ==template==
+				return ret;
+			}
+		}
+		// ==template== {{ if not .Optimize }}
+		this.incChoiceAltCnt(ch, _choiceNoMatch);
+		// {{ end }} ==template==
+		return {val: null, ok: false};
+	}
+
+	function parseLabeledExpr(lab:LabeledExpr):RetValOk {
+		var startOffset = this.pt.offset;
+		var ret = this.parseExprWrap(lab.expr);
+		if (ret.ok && lab.label != "" && !this.checkSkipCode()) {
+			var m = this.vstack.first();
+			m[lab.label] = lab.textCapture ? this.sliceFromOffset(startOffset) : ret.val;
+		}
+		return ret;
+	}
+
+	function parseCodeExpr(code:CodeExpr):RetValOk {
+		if (!code.notSkip && this.checkSkipCode()) {
+			return {val: null, ok: true};
+		}
+		return {val: code.run(this), ok: false};
+	}
+
+	function parseLitMatcher(lit:LitMatcher):RetValOk {
+		var start = savepointClone(this.pt);
+		var litVal = lit.val;
+		if (lit.ignoreCase) {
+			litVal = lit.val.toLowerCase();
+		}
+
+		for (want in new StringIteratorUnicode(litVal)) {
+			var cur = this.pt.rn;
+			if (cur != want) {
+				this.failAt(false, start, lit.want);
+				this.restore(start);
+				return {val: null, ok: false};
+			}
+			this.read();
+		}
+		this.failAt(true, start, lit.want);
+		return {val: null, ok: true};
+	}
+
+	function parseNotCodeExpr(code:NotCodeExpr):RetValOk {
+		return {val: null, ok: !code.run(this)};
+	}
+
+	function parseNotExpr(not:NotExpr):RetValOk {
+		return this.parseNotExprBase(not, false);
+	}
+
+	function parseNotLogicalExpr(not:NotLogicalExpr):RetValOk {
+		return this.parseNotExprBase(not, true);
+	}
+
+	function parseNotExprBase(not:NotExpr, logical:Bool):RetValOk {
+		var pt = savepointClone(this.pt);
+		this.maxFailInvertExpected = !this.maxFailInvertExpected;
+
+		this.scStack.add(true);
+		var ret = this.parseExprWrap(not.expr);
+		this.scStack.pop();
+
+		this.maxFailInvertExpected = !this.maxFailInvertExpected;
+		var matchedOffset = this.pt.offset;
+		this.restore(pt);
+
+		if (logical) {
+			return {val: null, ok: !ret.ok && this.pt.offset != matchedOffset}
+		}
+		return {val: null, ok: !ret.ok};
+	}
+
+	function parseOneOrMoreExpr(expr:OneOrMoreExpr):RetValOk {
+		var vals:Array<Any> = [];
+		var matched = false;
+
+		while (true) {
+			var ret = this.parseExprWrap(expr.expr);
+			if (!ret.ok) {
+				if (vals.length > 0) {
+					return {val: vals, ok: matched};
+				}
+				return {val: null, ok: matched};
+			}
+			matched = true;
+			if (ret.val != null) {
+				vals.push(ret.val);
+			}
+		}
+	}
+
+	function parseRecoveryExpr(recover:RecoveryExpr):RetValOk {
+		this.pushRecovery(recover.failureLabel, recover.recoverExpr);
+		var ret = this.parseExprWrap(recover.expr);
+		this.popRecovery();
+		return ret;
+	}
+
+	function parseRuleRefExpr(ref:RuleRefExpr):RetValOk {
+		var rule = this.rules[ref.name];
+		if (rule == null) {
+			// p.addErr(fmt.Errorf("undefined rule: %s", ref.name))
+			this.addErr(new Exception('undefined rule: ${ref.name}'));
+			return {val: null, ok: false};
+		}
+		return this.parseRuleWrap(rule);
+	}
+
+	// {{ if .IRefEnable }}
+	function parseSeqExpr(ref:RuleIRefExpr):RetValOk {
+		return this.parseRuleWrap(this.rulesArray[ref.index])
+	}
+	// {{ end }} ==template==
+
+	function parseSeqExpr(seq:SeqExpr):RetValOk {
+		var vals = [];
+		var notSkipCode = this.checkSkipCode();
+
+		var pt = savepointClone(this.pt);
+		for (expr in seq.exprs) {
+			var ret = this.parseExprWrap(expr);
+			if (!ret.ok) {
+				this.restore(pt);
+				return {val: null, ok: false};
+			}
+			if (notSkipCode && ret.val != null) {
+				vals.push(ret.val);
+			}
+		}
+		if (vals.length > 0) {
+			return {val: vals, ok: true};
+		}
+		return {val: null, ok: true};
+	}
+
+	function parseThrowExpr(expr:ThrowExpr):RetValOk {
+		// for i := len(this.recoveryStack) - 1; i >= 0; i-- {
+		// 	if recoverExpr, ok := this.recoveryStack[i][expr.label]; ok {
+		for (i in this.recoveryStack) {
+			var recoverExpr = i[expr.label];
+			if (recoverExpr != null) {
+				return this.parseExprWrap(recoverExpr);
+			}
+		}
+		return {val: null, ok: false};
+	}
+
+	function parseZeroOrMoreExpr(expr:ZeroOrMoreExpr):RetValOk {
+		var vals:Array<Any> = [];
+		while (true) {
+			var ret = this.parseExprWrap(expr.expr);
+			if (!ret.ok) {
+				if (vals.length > 0) {
+					return {val: vals, ok: true};
+				}
+				return {val: null, ok: true};
+			}
+			if (ret.val != null) {
+				vals.push(ret.val);
+			}
+		}
+	}
+
+	function parseZeroOrOneExpr(expr:ZeroOrOneExpr):RetValOk {
+		var ret = this.parseExprWrap(expr.expr);
+		// whether it matched or not, consider it a match
+		return {val: ret.val, ok: true};
+	}
+}
+
+function listJoin(list:Array<String>, sep:String, lastSep:String):String {
+    switch (list.length) {
+        case 0:
+            return "";
+        case 1:
+            return list[0];
+        default:
+            // return strings.Join(list[:len(list)-1], sep) + " " + lastSep + " " + list[len(list)-1]
+            return list.slice(0, list.length - 1).join(sep) + " " + lastSep + " " + list[list.length - 1];
+    }
+}

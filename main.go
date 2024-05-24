@@ -15,7 +15,7 @@ import (
 
 	"github.com/fy0/pigeon/ast"
 	builderGo "github.com/fy0/pigeon/builder"
-	// builderHx "github.com/fy0/pigeon/builder_hx"
+	builderHx "github.com/fy0/pigeon/builder_hx"
 )
 
 // exit function mockable for tests
@@ -158,15 +158,15 @@ func main() {
 			}
 		}
 
-		// if *targetFlag == "hx" {
-		// 	if err := builderHx.BuildParser(
-		// 		outBuf, grammar, curNmOpt, optimizeParser,
-		// 		runFuncPrefix, grammarOnly, grammarName,
-		// 		nolintOpt, refExprByIndex); err != nil {
-		// 		fmt.Fprintln(os.Stderr, "build error: ", err)
-		// 		exit(5)
-		// 	}
-		// }
+		if *targetFlag == "hx" {
+			if err := builderHx.BuildParser(
+				outBuf, grammar, curNmOpt, optimizeParser,
+				runFuncPrefix, grammarOnly, grammarName,
+				nolintOpt, refExprByIndex); err != nil {
+				fmt.Fprintln(os.Stderr, "build error: ", err)
+				exit(5)
+			}
+		}
 
 		// Defaults from golang.org/x/tools/cmd/goimports
 		options := &imports.Options{
