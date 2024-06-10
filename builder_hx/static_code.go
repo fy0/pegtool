@@ -357,11 +357,11 @@ class ErrList {
 			case 0:
 				return "";
 			case 1:
-				return this.lst[0].Inner.toString();
+				return parserErrorToString(this.lst[0]);
 			default:
 				var arr = [];
 				for (i in this.lst) {
-					arr.push(i.Inner.toString());
+					arr.push(parserErrorToString(i));
 				}
 				return arr.join('\n');
 		}
@@ -371,7 +371,7 @@ class ErrList {
 		if (this.lst.length == 0) {
 			return null;
 		}
-		return new Exception(this.err().error());
+		return new Exception('Parse Failed:\n' + this.err().error() + '\n');
 	}
 
 	public function new() {}
@@ -387,7 +387,7 @@ typedef ParserError = {
 }
 
 // Error returns the error message.
-function parserErrorError(p:ParserError):String {
+function parserErrorToString(p:ParserError):String {
 	return p.prefix + ": " + p.Inner.toString();
 }
 
@@ -640,7 +640,7 @@ class Parser {
 
 	// read advances the parser to the next rune.
 	function read() {
-		this.pt.offset += this.pt.w;
+		this.pt.offset += this.pt.w > 0 ? 1 : 0;
 		// rn, n := utf8.DecodeRune(p.data[p.pt.offset:])
 		// p.pt.rn = rn
 		// p.pt.w = n
