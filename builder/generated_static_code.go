@@ -99,21 +99,6 @@ func debug(b bool) option {
 		return debug(old)
 	}
 }
-
-// memoize creates an option to set the memoize flag to b. When set to true,
-// the parser will cache all results so each expression is evaluated only
-// once. This guarantees linear parsing time even for pathological cases,
-// at the expense of more memory and slower times for typical cases.
-//
-// The default is false.
-func memoize(b bool) option {
-	return func(p *parser) option {
-		old := p.memoize
-		p.memoize = b
-		return memoize(old)
-	}
-}
-
 // {{ end }} ==template==
 
 // Parse parses the data from b using filename as information in the
@@ -425,14 +410,12 @@ type parser struct {
 	recover bool
 	// ==template== {{ if not .Optimize }}
 	debug bool
-
-	memoize bool
 	// {{ end }} ==template==
-	// ==template== {{ if not .Optimize }}
+
 	// memoization table for the packrat algorithm:
 	// map[offset in source] map[expression or rule] {value, match}
-	memo map[int]map[any]resultTuple
-	// {{ end }} ==template==
+	memo1 map[int]map[any]*resultTuple
+	memo2 map[int]map[any]*resultTuple
 
 	// rules table, maps the rule identifier to the rule node
 	rules map[string]*rule
@@ -478,13 +461,15 @@ func newParser(filename string, b []byte, opts ...option) *parser {
 		errs:     new(errList),
 		data:     b,
 		pt:       savepoint{position: position{line: 1}},
-		recover:  true,
+		recover:  false,
 		cur: current{
 			data: &ParserCustomData{},
 		},
 		maxFailPos:      position{col: 1, line: 1},
 		maxFailExpected: make([]string, 0, 20),
 		Stats:           &stats,
+		memo1: map[int]map[any]*resultTuple{},
+		memo2: map[int]map[any]*resultTuple{},
 		// start rule is rule [0] unless an alternate entrypoint is specified
 		entrypoint: "{{ .Entrypoint }}",
 		scStack: []bool{false},
@@ -694,33 +679,6 @@ func (p *parser) sliceFromOffset(offset int) []byte {
 	return p.data[offset:p.pt.position.offset]
 }
 
-// ==template== {{ if not .Optimize }}
-func (p *parser) getMemoized(node any) (resultTuple, bool) {
-	if len(p.memo) == 0 {
-		return resultTuple{}, false
-	}
-	m := p.memo[p.pt.offset]
-	if len(m) == 0 {
-		return resultTuple{}, false
-	}
-	res, ok := m[node]
-	return res, ok
-}
-
-func (p *parser) setMemoized(pt savepoint, node any, tuple resultTuple) {
-	if p.memo == nil {
-		p.memo = make(map[int]map[any]resultTuple)
-	}
-	m := p.memo[pt.offset]
-	if m == nil {
-		m = make(map[any]resultTuple)
-		p.memo[pt.offset] = m
-	}
-	m[node] = tuple
-}
-
-// {{ end }} ==template==
-
 // {{ if .GrammarMap }}
 
 func (p *parser) parse(grammar map[string]*rule) (val any, err error) {
@@ -882,23 +840,6 @@ func listJoin(list []string, sep string, lastSep string) string {
 	}
 }
 
-// ==template== {{ if not .Optimize }}
-func (p *parser) parseRuleMemoize(rule *rule) (any, bool) {
-	res, ok := p.getMemoized(rule)
-	if ok {
-		p.restore(res.end)
-		return res.v, res.b
-	}
-
-	startMark := p.pt
-	val, ok := p.parseRule(rule)
-	p.setMemoized(startMark, rule, resultTuple{val, ok, p.pt})
-
-	return val, ok
-}
-
-// {{ end }} ==template==
-
 // ==template== {{ if .NeedExprWrap }}
 func (p *parser) parseRuleWrap(rule *rule) (any, bool) {
 	// ==template== {{ if not .Optimize }}
@@ -914,15 +855,7 @@ func (p *parser) parseRuleWrap(rule *rule) (any, bool) {
 		// {{ end }} ==template==
 	)
 
-	// {{ if not .Optimize }}
-	if p.memoize {
-		val, ok = p.parseRuleMemoize(rule)
-	} else {
-		val, ok = p.parseRule(rule)
-	}
-	// {{ else }}
 	val, ok = p.parseRule(rule)
-	// {{ end }} ==template==
 
 	// ==template== {{ if not .Optimize }}
 	if ok && p.debug {
@@ -959,26 +892,7 @@ func (p *parser) parseRuleWrap(rule *rule) (any, bool) {
 
 // ==template== {{ if .NeedExprWrap }}
 func (p *parser) parseExprWrap(expr any) (any, bool) {
-	// ==template== {{ if not .Optimize }}
-	var pt savepoint
-
-	if p.memoize {
-		res, ok := p.getMemoized(expr)
-		if ok {
-			p.restore(res.end)
-			return res.v, res.b
-		}
-		pt = p.pt
-	}
-
-	// {{ end }} ==template==
 	val, ok := p.parseExpr(expr)
-
-	// ==template== {{ if not .Optimize }}
-	if p.memoize {
-		p.setMemoized(pt, expr, resultTuple{val, ok, p.pt})
-	}
-	// {{ end }} ==template==
 	return val, ok
 }
 // {{ end }} ==template==
@@ -989,6 +903,34 @@ func (p *parser) {{ .ParseExprName }}(expr any) (any, bool) {
 	if p.ExprCnt > p.maxExprCnt {
 		panic(errMaxExprCnt)
 	}
+
+	skipCode := p.checkSkipCode()
+	memo := p.memo1
+	if skipCode {
+		memo = p.memo2
+	}
+
+	setMemoized := func(pos int, expr any, val resultTuple) {
+		if memo[pos] == nil {
+			memo[pos] = map[any]*resultTuple{}
+		}
+		memo[pos][expr] = &val
+	}
+
+	getMemoized := func(expr any) *resultTuple {
+		pos := p.pt.offset
+		if memo[pos] == nil {
+			return nil
+		}
+		return memo[pos][expr]
+	}
+
+	if m := getMemoized(expr); m != nil {
+		p.restore(&m.end)
+		return m.v, m.b
+	}
+
+	pos := p.pt.offset
 
 	var val any
 	var ok bool
@@ -1044,6 +986,8 @@ func (p *parser) {{ .ParseExprName }}(expr any) (any, bool) {
 	default:
 		panic(fmt.Sprintf("unknown expression type %T", expr))
 	}
+
+	setMemoized(pos, expr, resultTuple{val, ok, p.pt})
 	return val, ok
 }
 
@@ -1069,7 +1013,6 @@ func (p *parser) parseActionExpr(act *actionExpr) (any, bool) {
 		p._errPos = &start.position
 		actVal := act.run(p)
 		p._errPos = nil
-
 		val = actVal
 	}
 	// ==template== {{ if not .Optimize }}
@@ -1227,11 +1170,6 @@ func (p *parser) incChoiceAltCnt(ch *choiceExpr, altI int) {
 // {{ end }} ==template==
 
 func (p *parser) parseChoiceExpr(ch *choiceExpr) (any, bool) {
-	// ==template== {{ if not .Optimize }}
-	if p.debug {
-		defer p.out(p.in("parseChoiceExpr"))
-	}
-	// {{ end }} ==template==
 	for altI, alt := range ch.alternatives {
 		// dummy assignment to prevent compile error if optimized
 		_ = altI
@@ -1347,7 +1285,7 @@ func (p *parser) parseNotExprBase(not *notExpr, logical bool) (any, bool) {
 	p.restore(&pt)
 
 	if logical {
-		return nil, ok && p.pt.offset != matchedOffset
+		return nil, !ok && p.pt.offset != matchedOffset
 	}
 	return nil, !ok
 }

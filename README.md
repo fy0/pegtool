@@ -14,6 +14,7 @@ See the [godoc page][3] for detailed usage. Also have a look at the [Pigeon Wiki
 * Performance tweak, 5-10x faster than original version(with some trade off).
   * `parser.state` is removed, because it's very slow.
   * `parseSeqExpr` only collect not nil values now. Mainly for performance improvement. For example: `e <- Expr __ Plus __ Expr` returns \[expr, '+', expr], original version return \[expr, nil, '+', nil, expr].
+  * Memoized can be worked with Optimize and enable by default.
   * Generated parser do less memory allocated.
   * Generated parser uses fewer lines of code.
 
