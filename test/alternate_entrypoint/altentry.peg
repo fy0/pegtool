@@ -1,23 +1,26 @@
 {
-  package altentry
+package altentry
+
+type ParserCustomData struct {
+}
 }
 
 Entry1 <- A C EOF {
-  return c.text, nil
+  return string(c.text)
 }
 
 Entry2 <- B C EOF {
-  return c.text, nil
+  return string(c.text)
 }
 
 Entry3 <- C EOF {
-  return c.text, nil
+  return string(c.text)
 }
 
 A <- 'a'+
 B <- 'b'+
 C <- 'c'+ {
-  return c.text, nil
+  return string(c.text)
 }
 
 EOF ← !.

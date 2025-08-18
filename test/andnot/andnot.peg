@@ -1,20 +1,13 @@
 {
 package andnot
 
-func toString(v any) string {
-    ifSl := v.([]any)
-    var res string
-    for _, s := range ifSl {
-        res += string(s.([]byte))
-    }
-    return res
-}
+type ParserCustomData struct {}
 }
 
 Input ← _ AB _ EOF
 
-AB ← abees:[ab]+ &{ return strings.HasSuffix(toString(abees), "b"), nil } / CD
-CD ← ceedees:[cd]+ !{ return strings.HasSuffix(toString(ceedees), "c"), nil }
+AB ← abees:<[ab]+> &{ return strings.HasSuffix(abees.(string), "b") } / CD
+CD ← ceedees:<[cd]+> !{ return strings.HasSuffix(ceedees.(string), "c") }
 
 _ ← [ \t\n\r]*
 EOF ← !.

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"golang.org/x/tools/imports"
@@ -47,8 +48,14 @@ func main() {
 		nm = flag.Arg(0)
 	}
 	in := bufio.NewReader(inf)
+	b, err := io.ReadAll(in)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "read error: ", err)
+		os.Exit(2)
+	}
 
-	g, err := ParseReader(nm, in, Debug(*dbgFlag))
+	p := newParser(nm, b, debug(*dbgFlag))
+	g, err := p.parse(nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "parse error: ", err)
 		os.Exit(3)

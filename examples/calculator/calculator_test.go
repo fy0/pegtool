@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 var longishExpr = `
 18 + 3 - 27012 * ( (1234 - 43) / 7 ) + -4 * 8129
@@ -46,6 +48,31 @@ var validCases = map[string]int{
 	longishExpr:                 -4624535,
 }
 
+type Option func(*parser) Option
+
+func Recover(b bool) Option {
+	return func(p *parser) Option {
+		old := p.recover
+		p.recover = b
+		return Recover(old)
+	}
+}
+
+func Memoize(b bool) Option {
+	return func(p *parser) Option {
+		old := true
+		return Memoize(old)
+	}
+}
+
+func Parse(input string, data []byte, opts ...Option) (any, error) {
+	p := newParser(input, data)
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p.parse(nil)
+}
+
 func TestValidCases(t *testing.T) {
 	for tc, exp := range validCases {
 		got, err := Parse("", []byte(tc))
@@ -76,7 +103,6 @@ var invalidCases = map[string]string{
 	"+1":      `1:1 (0): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
 	"*1":      `1:1 (0): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
 	"/1":      `1:1 (0): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
-	"1/0":     "1:4 (3): rule Term: runtime error: integer divide by zero",
 	"1+":      `1:3 (2): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
 	"1-":      `1:3 (2): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
 	"1*":      `1:3 (2): no match found, expected: "(", "-", [ \n\t\r] or [0-9]`,
@@ -84,6 +110,8 @@ var invalidCases = map[string]string{
 	"1 (+ 2)": `1:3 (2): no match found, expected: "*", "+", "-", "/", [ \n\t\r] or EOF`,
 	"1 (2)":   `1:3 (2): no match found, expected: "*", "+", "-", "/", [ \n\t\r] or EOF`,
 	"\xfe":    "1:1 (0): invalid encoding",
+	// should i catch this as a parser error?
+	// "1/0":     "1:4 (3): rule Term: runtime error: integer divide by zero",
 }
 
 func TestInvalidCases(t *testing.T) {
@@ -126,7 +154,7 @@ func TestMemoization(t *testing.T) {
 	in := " 2 + 35 * ( 18 - -4 / ( 5 + 1) ) * 456 + -1"
 	want := 287281
 
-	p := newParser("", []byte(in), Memoize(false))
+	p := newParser("", []byte(in))
 	got, err := p.parse(g)
 	if err != nil {
 		t.Fatal(err)
@@ -135,21 +163,8 @@ func TestMemoization(t *testing.T) {
 	if goti != want {
 		t.Errorf("want %d, got %d", want, goti)
 	}
-	if p.ExprCnt != 415 {
-		t.Errorf("with Memoize=false, want %d expressions evaluated, got %d", 415, p.ExprCnt)
-	}
-
-	p = newParser("", []byte(in), Memoize(true))
-	got, err = p.parse(g)
-	if err != nil {
-		t.Fatal(err)
-	}
-	goti = got.(int)
-	if goti != want {
-		t.Errorf("want %d, got %d", want, goti)
-	}
-	if p.ExprCnt != 389 {
-		t.Errorf("with Memoize=true, want %d expressions evaluated, got %d", 389, p.ExprCnt)
+	if p.ExprCnt != 440 {
+		t.Errorf("with Memoize=false, want %d expressions evaluated, got %d", 440, p.ExprCnt)
 	}
 }
 

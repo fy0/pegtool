@@ -7,7 +7,11 @@
 // Inspired by pegjs arithmetic example:
 // https://github.com/pegjs/pegjs/blob/master/examples/arithmetics.pegjs
 //
+//nolint:unreachable
 package main
+
+type ParserCustomData struct {
+}
 
 var ops = map[string]func(int, int) int {
     "+": func(l, r int) int {
@@ -31,7 +35,7 @@ func main() {
     if len(os.Args) != 2 {
         log.Fatal("Usage: calculator 'EXPR'")
     }
-    got, err := ParseReader("", strings.NewReader(os.Args[1]))
+	got, err := parse("", []byte(os.Args[1]))
     if err != nil {
         log.Fatal(err)
     }
@@ -50,8 +54,8 @@ func eval(first, rest any) int {
     restSl := toAnySlice(rest)
     for _, v := range restSl {
         restExpr := toAnySlice(v)
-        r := restExpr[3].(int)
-        op := restExpr[1].(string)
+        r := restExpr[1].(int)
+        op := restExpr[0].(string)
         l = ops[op](l, r)
     }
     return l
@@ -60,40 +64,44 @@ func eval(first, rest any) int {
 
 Input <- expr:Expr EOF {
     cntCodeBlocks++
-    return expr, nil
+    return expr
 }
 
-Expr <- _ first:Term rest:( _ AddOp _ Term )* _ {
+Expr <- _ first:Term rest:( _ op:AddOp _ r:Term { return []any{op, r} })* _ {
     cntCodeBlocks++
-    return eval(first, rest), nil
+    return eval(first, rest)
 }
 
-Term <- first:Factor rest:( _ MulOp _ Factor )* {
+Term <- first:Factor rest:( _ op:MulOp _ r:Factor { return []any{op, r} })* {
     cntCodeBlocks++
-    return eval(first, rest), nil
+    return eval(first, rest)
 }
 
 Factor <- '(' expr:Expr ')' {
     cntCodeBlocks++
-    return expr, nil
+    return expr
 } / integer:Integer {
     cntCodeBlocks++
-    return integer, nil
+    return integer
 }
 
 AddOp <- ( '+' / '-' ) {
     cntCodeBlocks++
-    return string(c.text), nil
+    return string(c.text)
 }
 
 MulOp <- ( '*' / '/' ) {
     cntCodeBlocks++
-    return string(c.text), nil
+    return string(c.text)
 }
 
 Integer <- '-'? [0-9]+ {
     cntCodeBlocks++
-    return strconv.Atoi(string(c.text))
+    v, err := strconv.Atoi(string(c.text))
+    if err != nil {
+        p.addErr(err)
+    }
+    return v
 }
 
 _ "whitespace" <- [ \n\t\r]*

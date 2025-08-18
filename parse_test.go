@@ -180,7 +180,7 @@ func TestInvalidParseCases(t *testing.T) {
 	}
 	for _, conf := range config {
 		for tc, exp := range invalidParseCases {
-			_, err := Parse("file", []byte(tc), Memoize(conf.memoize))
+			_, err := Parse("file", []byte(tc), memoized(conf.memoize))
 			if err == nil {
 				t.Errorf("%q: want error, got none", tc)
 				continue

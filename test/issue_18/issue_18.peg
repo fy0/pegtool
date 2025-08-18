@@ -3,6 +3,13 @@ package issue18
 
 import "fmt"
 
+type ParserCustomData struct {}
+
+func Parse(filename string, input []byte) (any, error) {
+	p := newParser("", input)
+	return p.parse(nil)
+}
+
 func main() {
     fmt.Println("with FailureTracking:")
     _, err := Parse("", []byte(`123455`))

@@ -1,7 +1,8 @@
 {
 package issue1
+
+type ParserCustomData struct {}
 }
 
-TableRef <- database:(ID '.')? table:ID    { return fmt.Sprintf("%v.%s", database, table), nil }
-ID <- [a-z]+                               { return c.text, nil }
-
+TableRef <- database:(ID '.')? table:ID    { return fmt.Sprintf("%v.%s", database, table) }
+ID <- [a-z]+                               { return string(c.text) }

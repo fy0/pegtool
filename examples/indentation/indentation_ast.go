@@ -42,8 +42,8 @@ type ProgramNode struct {
 	ret        ReturnNode
 }
 
-func newProgramNode(stmts StatementsNode, ret ReturnNode) (ProgramNode, error) {
-	return ProgramNode{stmts, ret}, nil
+func newProgramNode(stmts StatementsNode, ret ReturnNode) ProgramNode {
+	return ProgramNode{stmts, ret}
 }
 
 func (n ProgramNode) exec() (int, error) {
@@ -59,13 +59,13 @@ type StatementsNode struct {
 	statements []Statement
 }
 
-func newStatementsNode(stmts any) (StatementsNode, error) {
+func newStatementsNode(stmts any) StatementsNode {
 	st := toAnySlice(stmts)
 	ex := make([]Statement, len(st))
 	for i, v := range st {
 		ex[i] = v.(Statement)
 	}
-	return StatementsNode{ex}, nil
+	return StatementsNode{ex}
 }
 
 func (n StatementsNode) exec() error {
@@ -83,8 +83,8 @@ type ReturnNode struct {
 	arg IdentifierNode
 }
 
-func newReturnNode(arg IdentifierNode) (ReturnNode, error) {
-	return ReturnNode{arg}, nil
+func newReturnNode(arg IdentifierNode) ReturnNode {
+	return ReturnNode{arg}
 }
 
 func (n ReturnNode) exec() (int, error) {
@@ -98,8 +98,8 @@ type IfNode struct {
 	statements StatementsNode
 }
 
-func newIfNode(arg LogicalExpressionNode, stmts StatementsNode) (IfNode, error) {
-	return IfNode{arg, stmts}, nil
+func newIfNode(arg LogicalExpressionNode, stmts StatementsNode) IfNode {
+	return IfNode{arg, stmts}
 }
 
 func (n IfNode) exec() error {
@@ -120,8 +120,8 @@ type AssignmentNode struct {
 	rvalue AdditiveExpressionNode
 }
 
-func newAssignmentNode(lvalue IdentifierNode, rvalue AdditiveExpressionNode) (AssignmentNode, error) {
-	return AssignmentNode{lvalue.val, rvalue}, nil
+func newAssignmentNode(lvalue IdentifierNode, rvalue AdditiveExpressionNode) AssignmentNode {
+	return AssignmentNode{lvalue.val, rvalue}
 }
 
 func (n AssignmentNode) exec() error {
@@ -138,8 +138,8 @@ type LogicalExpressionNode struct {
 	expr PrimaryExpressionNode
 }
 
-func newLogicalExpressionNode(expr PrimaryExpressionNode) (LogicalExpressionNode, error) {
-	return LogicalExpressionNode{expr}, nil
+func newLogicalExpressionNode(expr PrimaryExpressionNode) LogicalExpressionNode {
+	return LogicalExpressionNode{expr}
 }
 
 func (n LogicalExpressionNode) exec() (bool, error) {
@@ -155,24 +155,24 @@ type AdditiveExpressionNode struct {
 	op   string
 }
 
-func newAdditiveExpressionNode(arg PrimaryExpressionNode, rest any) (AdditiveExpressionNode, error) {
+func newAdditiveExpressionNode(arg PrimaryExpressionNode, rest any) AdditiveExpressionNode {
 	var a AdditiveExpressionNode
 	var arg1 any = arg
 
 	restSl := toAnySlice(rest)
 	if len(restSl) == 0 {
 		zero, _ := newIntegerNode("0")
-		arg2, _ := newPrimaryExpressionNode(zero)
+		arg2 := newPrimaryExpressionNode(zero)
 		a = AdditiveExpressionNode{arg1, arg2, "+"}
 	}
 	for _, v := range restSl {
 		restExpr := toAnySlice(v)
-		arg2 := restExpr[3].(PrimaryExpressionNode)
-		op := restExpr[1].(string)
+		arg2 := restExpr[1].(PrimaryExpressionNode)
+		op := restExpr[0].(string)
 		a = AdditiveExpressionNode{arg1, arg2, op}
 		arg1 = a
 	}
-	return a, nil
+	return a
 }
 
 func (n AdditiveExpressionNode) exec() (int, error) {
@@ -206,8 +206,8 @@ type PrimaryExpressionNode struct {
 	arg any
 }
 
-func newPrimaryExpressionNode(arg any) (PrimaryExpressionNode, error) {
-	return PrimaryExpressionNode{arg}, nil
+func newPrimaryExpressionNode(arg any) PrimaryExpressionNode {
+	return PrimaryExpressionNode{arg}
 }
 
 func (n PrimaryExpressionNode) exec() (int, error) {
@@ -243,8 +243,8 @@ type IdentifierNode struct {
 	val string
 }
 
-func newIdentifierNode(val string) (IdentifierNode, error) {
-	return IdentifierNode{val}, nil
+func newIdentifierNode(val string) IdentifierNode {
+	return IdentifierNode{val}
 }
 
 func (n IdentifierNode) exec() (int, error) {

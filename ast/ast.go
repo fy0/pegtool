@@ -636,7 +636,7 @@ func (r *RuleRefExpr) InitialNames() map[string]struct{} {
 
 // StateCodeExpr is an expression which can modify the internal state of the parser.
 type StateCodeExpr struct {
-	p      Pos
+	// p      Pos
 	Code   *CodeBlock
 	FuncIx int
 }

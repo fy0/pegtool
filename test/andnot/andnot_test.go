@@ -24,7 +24,8 @@ var cases = map[string]string{
 
 func TestAndNot(t *testing.T) {
 	for tc, exp := range cases {
-		_, err := Parse("", []byte(tc))
+		p := newParser("", []byte(tc))
+		_, err := p.parse(nil)
 		var got string
 		if err != nil {
 			got = err.Error()

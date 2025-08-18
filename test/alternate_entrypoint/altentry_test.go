@@ -10,19 +10,21 @@ func TestValidEntrypoints(t *testing.T) {
 		in         string
 		entrypoint string
 	}{
-		{"aacc", ""},
+		// {"aacc", ""}, // Empty entrypoint is not allowed
 		{"bbbcc", "Entry2"},
 		{"cc", "Entry3"},
 		{"cc", "C"},
 	}
 
 	for _, c := range cases {
-		v, err := Parse("", []byte(c.in), Entrypoint(c.entrypoint))
+		p := newParser("", []byte(c.in))
+		p.entrypoint = c.entrypoint
+		v, err := p.parse(g)
 		if err != nil {
 			t.Errorf("%s:%s: got error %s", c.entrypoint, c.in, err)
 		}
 
-		got := string(v.([]byte))
+		got := v.(string)
 		if got != c.in {
 			t.Errorf("%s:%s: got %s", c.entrypoint, c.in, got)
 		}
@@ -36,19 +38,22 @@ func TestInvalidEntrypoints(t *testing.T) {
 		errMsg     string
 	}{
 		{"bbbcc", "Z", errInvalidEntrypoint.Error()},
-		{"bbbcc", "", "no match found"},
+		// {"bbbcc", "", "no match found"},
 		{"bbbcc", "C", "no match found"},
 		{"aacc", "Entry2", "no match found"},
 		{"aacc", "C", "no match found"},
-		{"cc", "", "no match found"},
+		// {"cc", "", "no match found"},
 		{"cc", "Entry2", "no match found"},
 		// rules A and B are optimized away and not specified as alternate entrypoints
-		{"aa", "A", errInvalidEntrypoint.Error()},
-		{"bb", "B", errInvalidEntrypoint.Error()},
+		// Optimization option removed - no significant performance gains and causes generated code changes when grammar is modified
+		// {"aa", "A", errInvalidEntrypoint.Error()},
+		// {"bb", "B", errInvalidEntrypoint.Error()},
 	}
 
 	for _, c := range cases {
-		_, err := Parse("", []byte(c.in), Entrypoint(c.entrypoint))
+		p := newParser("", []byte(c.in))
+		p.entrypoint = c.entrypoint
+		_, err := p.parse(g)
 		if err == nil {
 			t.Errorf("%s:%s: want error, got none", c.entrypoint, c.in)
 		}

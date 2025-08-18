@@ -8,6 +8,7 @@ import (
 )
 
 // IMPORTANT: All code below this line is added to the parser as static code
+// nolint: unused
 func rangeTable(class string) *unicode.RangeTable {
 	if rt, ok := unicode.Categories[class]; ok {
 		return rt

@@ -1,5 +1,10 @@
 {
+//nolint:unreachable
 package main
+
+type ParserCustomData struct {
+    Indentation int
+}
 
 func toAnySlice(v any) []any {
     if v == nil {
@@ -10,13 +15,13 @@ func toAnySlice(v any) []any {
 
 }
 
-Input       ← #{ c.state["Indentation"] = 0; return nil } s:Statements  r:ReturnOp EOF 
+Input       ← &{ c.data.Indentation = 0; return true } s:Statements  r:ReturnOp EOF 
                                             { return newProgramNode(s.(StatementsNode),r.(ReturnNode)) }
 Statements  ← s:Line+                       { return newStatementsNode(s)}
-Line        ← INDENTATION s:Statement       { return s,nil }
+Line        ← INDENTATION s:Statement       { return s }
 ReturnOp    ← "return" _ arg:Identifier EOL { return newReturnNode(arg.(IdentifierNode))}
 
-Statement   ← s:Assignment EOL              { return s.(AssignmentNode),nil }
+Statement   ← s:Assignment EOL              { return s.(AssignmentNode) }
     / "if" _ arg:LogicalExpression _? ":" EOL INDENT s:Statements DEDENT 
                                             { return newIfNode(arg.(LogicalExpressionNode),s.(StatementsNode)) }
   
@@ -25,15 +30,15 @@ Assignment ← lvalue:Identifier _? "=" _? rvalue:AdditiveExpression
                                             { return newAssignmentNode(lvalue.(IdentifierNode),rvalue.(AdditiveExpressionNode)) }
 
 LogicalExpression   ← arg:PrimaryExpression { return newLogicalExpressionNode(arg.(PrimaryExpressionNode)) }
-AdditiveExpression  ← arg:PrimaryExpression rest:( _ AddOp _ PrimaryExpression )* 
+AdditiveExpression  ← arg:PrimaryExpression rest:( _ op:AddOp _ r:PrimaryExpression { return []any{op, r} })* 
                                             { return newAdditiveExpressionNode(arg.(PrimaryExpressionNode),rest)}
 PrimaryExpression   ← arg:(Integer / Identifier) 
                                             { return newPrimaryExpressionNode(arg) }
 
-Integer ← [0-9]+                            { return newIntegerNode(string(c.text)) }
+Integer ← [0-9]+                            { val, err := newIntegerNode(string(c.text)); if err != nil { p.addErr(err) }; return val }
 Identifier ← [a-zA-Z] [a-zA-Z0-9]*          { return newIdentifierNode(string(c.text)) }
 
-AddOp ← ( '+' / '-' )                       { return string(c.text),nil }
+AddOp ← ( '+' / '-' )                       { return string(c.text) }
 
 _ ← [ \t]+
 
@@ -43,9 +48,8 @@ Comment ← "//" [^\r\n]*
 
 EOF ← !.
 
-INDENTATION ← spaces:" "* &{ return len(toAnySlice(spaces)) == c.state["Indentation"].(int), nil }
+INDENTATION ← spaces:<(" ")*> &{ return len(spaces.(string)) == c.data.Indentation }
 
-INDENT ← #{ c.state["Indentation"] = c.state["Indentation"].(int) + 4; return nil }
+INDENT ← { c.data.Indentation += 4 }
 
-DEDENT ← #{ c.state["Indentation"] = c.state["Indentation"].(int) - 4; return nil }
-
+DEDENT ← { c.data.Indentation -= 4 }

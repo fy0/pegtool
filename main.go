@@ -35,18 +35,33 @@ func (r *ruleNamesFlag) Set(value string) error {
 	return nil
 }
 
+func ParseReader(filename string, r io.Reader, opts ...option) (any, error) { // nolint: deadcode
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return Parse(filename, b, opts...)
+}
+
+// Parse parses the data from b using filename as information in the
+// error messages.
+func Parse(filename string, b []byte, opts ...option) (any, error) {
+	return newParser(filename, b, opts...).parse(g)
+}
+
 func main() {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	// define command-line flags
 	var (
+		// noRecoverFlag      = fs.Bool("no-recover", false, "do not recover from panic")
 		dbgFlag            = fs.Bool("debug", false, "set debug mode")
 		shortHelpFlag      = fs.Bool("h", false, "show help page")
 		longHelpFlag       = fs.Bool("help", false, "show help page")
 		nolint             = fs.Bool("nolint", false, "add '// nolint: ...' comments to suppress warnings by gometalinter or golangci-lint")
-		noRecoverFlag      = fs.Bool("no-recover", false, "do not recover from panic")
 		outputFlag         = fs.String("o", "", "output file, defaults to stdout")
-		optimizeParserFlag = fs.Bool("optimize-parser", false, "generate optimized parser without Debug and Memoize options")
+		optimizeParserFlag = fs.Bool("optimize-parser", false, "generate optimized parser without Debug options")
 		recvrNmFlag        = fs.String("receiver-name", "c", "receiver name for the generated methods")
 		noBuildFlag        = fs.Bool("x", false, "do not build, only parse")
 
@@ -100,7 +115,8 @@ func main() {
 	}()
 
 	// parse input
-	g, err := ParseReader(nm, rc, Debug(*dbgFlag), Memoize(*cacheFlag), Recover(!*noRecoverFlag))
+	// , Recover(!*noRecoverFlag)
+	g, err := ParseReader(nm, rc, debug(*dbgFlag), memoized(*cacheFlag))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "parse error(s):\n", err)
 		exit(3)

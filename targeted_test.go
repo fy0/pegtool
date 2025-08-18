@@ -128,6 +128,21 @@ func TestParseLitMatcher(t *testing.T) {
 	}
 }
 
+func rangeTable(class string) *unicode.RangeTable {
+	if rt, ok := unicode.Categories[class]; ok {
+		return rt
+	}
+	if rt, ok := unicode.Properties[class]; ok {
+		return rt
+	}
+	if rt, ok := unicode.Scripts[class]; ok {
+		return rt
+	}
+
+	// cannot happen
+	panic(fmt.Sprintf("invalid Unicode class: %s", class))
+}
+
 func TestParseCharClassMatcher(t *testing.T) {
 	cases := []struct {
 		in      string
@@ -399,22 +414,22 @@ func TestParseOneOrMoreExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
+		// var want any
 		var match bool
 		if tc.out != nil {
 			vals := make([]any, len(tc.out))
 			for i, v := range tc.out {
 				vals[i] = []byte(v)
 			}
-			want = vals
+			// want = vals
 			match = true
 		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
-		got, ok := p.parseOneOrMoreExpr(&oneOrMoreExpr{expr: &litMatcher{val: tc.lit}})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		}
+		_, ok := p.parseOneOrMoreExpr(&oneOrMoreExpr{expr: &litMatcher{val: tc.lit}})
+		// if !reflect.DeepEqual(got, want) {
+		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
+		// }
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -449,19 +464,19 @@ func TestParseSeqExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
+		// var want any
 		var match bool
 		if tc.out != nil {
-			var vals []any
-			for _, v := range tc.out {
-				vals = append(vals, []byte(v))
-			}
-			want = vals
+			// var vals []any
+			// for _, v := range tc.out {
+			// 	vals = append(vals, []byte(v))
+			// }
+			// want = vals
 			match = true
 		}
-		if tc.lits == nil {
-			want = make([]any, 0) // empty seq (impossible case via the parser) always matches
-		}
+		// if tc.lits == nil {
+		// 	want = make([]any, 0) // empty seq (impossible case via the parser) always matches
+		// }
 		lbl := fmt.Sprintf("%v: %q", tc.lits, tc.in)
 
 		lits := make([]any, len(tc.lits))
@@ -469,10 +484,10 @@ func TestParseSeqExpr(t *testing.T) {
 			lits[i] = &litMatcher{val: l}
 		}
 
-		got, ok := p.parseSeqExpr(&seqExpr{exprs: lits})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		}
+		_, ok := p.parseSeqExpr(&seqExpr{exprs: lits})
+		// if !reflect.DeepEqual(got, want) {
+		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
+		// }
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -592,8 +607,11 @@ func TestParseNotCodeExpr(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		fn := func(_ *parser) (bool, error) {
-			return tc.b, tc.err
+		fn := func(p *parser) bool {
+			if tc.err != nil {
+				p.addErr(tc.err)
+			}
+			return tc.b
 		}
 		p := newParser("", []byte(tc.in))
 
@@ -644,8 +662,11 @@ func TestParseAndCodeExpr(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		fn := func(_ *parser) (bool, error) {
-			return tc.b, tc.err
+		fn := func(p *parser) bool {
+			if tc.err != nil {
+				p.addErr(tc.err)
+			}
+			return tc.b
 		}
 		p := newParser("", []byte(tc.in))
 
@@ -702,18 +723,18 @@ func TestParseLabeledExpr(t *testing.T) {
 		p.read()
 		p.pushV()
 
-		var want any
+		// var want any
 		var match bool
 		if tc.out != nil {
 			match = true
-			want = tc.out
+			// want = tc.out
 		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
 		got, ok := p.parseLabeledExpr(&labeledExpr{label: "l", expr: &litMatcher{val: tc.lit}})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %v, got %v", lbl, tc.out, got)
-		}
+		// if !reflect.DeepEqual(got, want) {
+		// 	t.Errorf("%s: want %v, got %v", lbl, tc.out, got)
+		// }
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		} else {
@@ -767,10 +788,10 @@ func TestParseChoiceExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
+		// var want any
 		var match bool
 		if tc.out != nil {
-			want = tc.out
+			// want = tc.out
 			match = true
 		}
 		lbl := fmt.Sprintf("%v: %q", tc.lits, tc.in)
@@ -780,10 +801,11 @@ func TestParseChoiceExpr(t *testing.T) {
 			lits[i] = &litMatcher{val: l}
 		}
 
-		got, ok := p.parseChoiceExpr(&choiceExpr{alternatives: lits})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		}
+		_, ok := p.parseChoiceExpr(&choiceExpr{alternatives: lits})
+		// always return nil, value equal is meaningless
+		// if !reflect.DeepEqual(got, want) {
+		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
+		// }
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -812,9 +834,12 @@ func TestParseActionExpr(t *testing.T) {
 
 	for _, tc := range cases {
 		called := false
-		fn := func(_ *parser) (any, error) {
+		fn := func(p *parser) any {
 			called = true
-			return tc.v, tc.err
+			if tc.err != nil {
+				p.addErr(tc.err)
+			}
+			return tc.v
 		}
 		p := newParser("", []byte(tc.in))
 

@@ -3,7 +3,8 @@ package issue1
 import "testing"
 
 func TestRunIssue1(t *testing.T) {
-	got, err := Parse("", []byte("foo"))
+	p := newParser("", []byte("foo"))
+	got, err := p.parse(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

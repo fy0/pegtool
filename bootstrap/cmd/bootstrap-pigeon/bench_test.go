@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+func Parse(filename string, b []byte, opts ...option) (any, error) {
+	return newParser(filename, b, opts...).parse(g)
+}
+
 func BenchmarkParsePigeonNoMemo(b *testing.B) {
 	d, err := os.ReadFile("../../../grammar/pigeon.peg")
 	if err != nil {
@@ -13,7 +17,7 @@ func BenchmarkParsePigeonNoMemo(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := Parse("", d, Memoize(false)); err != nil {
+		if _, err := Parse("", d, memoized(false)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -27,7 +31,7 @@ func BenchmarkParsePigeonMemo(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := Parse("", d, Memoize(true)); err != nil {
+		if _, err := Parse("", d, memoized(true)); err != nil {
 			b.Fatal(err)
 		}
 	}
