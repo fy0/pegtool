@@ -1,12 +1,27 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode"
 )
+
+func testNoMatchGrammar() *grammar {
+	return &grammar{
+		rules: []*rule{{
+			name: "Grammar",
+			expr: &choiceExpr{alternatives: []any{
+				&litMatcher{val: "b", want: "\"b\""},
+				&litMatcher{val: "a", want: "\"a\""},
+				&litMatcher{val: "a", want: "\"a\""},
+			}},
+		}},
+	}
+}
 
 func TestParseNoRule(t *testing.T) {
 	g := &grammar{}
@@ -28,6 +43,77 @@ func TestParseNoRule(t *testing.T) {
 	}
 	if pe.Inner != errNoRule {
 		t.Fatalf("want error %v, got %v", errNoRule, el[0])
+	}
+}
+
+func TestNoMatchErrorFormatterOverridesDefaultMessage(t *testing.T) {
+	var (
+		gotPos      position
+		gotInput    []byte
+		gotExpected []string
+	)
+
+	p := newParser("", []byte("c"), noMatchErrorFormatter(func(pos position, input []byte, expected []string) error {
+		gotPos = pos
+		gotInput = append([]byte(nil), input...)
+		gotExpected = append([]string(nil), expected...)
+		return errors.New("friendly no-match")
+	}))
+
+	_, err := p.parse(testNoMatchGrammar())
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "friendly no-match") {
+		t.Fatalf("want custom error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "no match found") {
+		t.Fatalf("want default message to be replaced, got %v", err)
+	}
+	if gotPos != (position{line: 1, col: 1, offset: 0}) {
+		t.Fatalf("want position 1:1 (0), got %#v", gotPos)
+	}
+	if !reflect.DeepEqual(gotInput, []byte("c")) {
+		t.Fatalf("want input %q, got %q", []byte("c"), gotInput)
+	}
+	if !reflect.DeepEqual(gotExpected, []string{"\"a\"", "\"b\""}) {
+		t.Fatalf("want expected %#v, got %#v", []string{"\"a\"", "\"b\""}, gotExpected)
+	}
+}
+
+func TestNoMatchErrorFormatterNilFallsBackToDefault(t *testing.T) {
+	p := newParser("", []byte("c"), noMatchErrorFormatter(func(position, []byte, []string) error {
+		return nil
+	}))
+
+	_, err := p.parse(testNoMatchGrammar())
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "no match found, expected: \"a\" or \"b\"") {
+		t.Fatalf("want default no-match message, got %v", err)
+	}
+}
+
+func TestNoMatchErrorFormatterIsParserScoped(t *testing.T) {
+	pWithFormatter := newParser("", []byte("c"), noMatchErrorFormatter(func(position, []byte, []string) error {
+		return errors.New("scoped formatter")
+	}))
+	_, errWithFormatter := pWithFormatter.parse(testNoMatchGrammar())
+	if errWithFormatter == nil || !strings.Contains(errWithFormatter.Error(), "scoped formatter") {
+		t.Fatalf("want scoped custom error, got %v", errWithFormatter)
+	}
+
+	pDefault := newParser("", []byte("c"))
+	_, errDefault := pDefault.parse(testNoMatchGrammar())
+	if errDefault == nil {
+		t.Fatal("want default error, got nil")
+	}
+	if strings.Contains(errDefault.Error(), "scoped formatter") {
+		t.Fatalf("want formatter to stay parser-scoped, got %v", errDefault)
+	}
+	if !strings.Contains(errDefault.Error(), "no match found") {
+		t.Fatalf("want default no-match error, got %v", errDefault)
 	}
 }
 

@@ -2147,6 +2147,14 @@ func (ss *parserStack) top() *savepoint {
 // the previous setting as an option.
 type option func(*parser) option
 
+func noMatchErrorFormatter(fn func(position, []byte, []string) error) option {
+	return func(p *parser) option {
+		old := p.noMatchErrorFormatter
+		p.noMatchErrorFormatter = fn
+		return noMatchErrorFormatter(old)
+	}
+}
+
 // statistics adds a user provided Stats struct to the parser to allow
 // the user to process the results after the parsing has finished.
 // Also the key for the "no match" counter is set.
@@ -2454,6 +2462,7 @@ type parser struct {
 	maxFailPos            position
 	maxFailExpected       []string
 	maxFailInvertExpected bool
+	noMatchErrorFormatter func(position, []byte, []string) error
 
 	// max number of expressions to be parsed
 	maxExprCnt uint64
@@ -2640,6 +2649,16 @@ func (p *parser) addErrAt(err error, pos position, expected []string) {
 	p.errs.add(pe)
 }
 
+func (p *parser) buildNoMatchError(pos position, expected []string) error {
+	if p.noMatchErrorFormatter != nil {
+		if err := p.noMatchErrorFormatter(pos, p.data, expected); err != nil {
+			return err
+		}
+	}
+
+	return errors.New("no match found, expected: " + listJoin(expected, ", ", "or"))
+}
+
 func (p *parser) failAt(fail bool, pos *position, want string) {
 	// process fail if parsing fails and not inverted or parsing succeeds and invert is set
 	if fail == p.maxFailInvertExpected {
@@ -2768,7 +2787,7 @@ func (p *parser) parse(grammar *grammar) (val any, err error) {
 			if eof {
 				expected = append(expected, "EOF")
 			}
-			p.addErrAt(errors.New("no match found, expected: "+listJoin(expected, ", ", "or")), p.maxFailPos, expected)
+			p.addErrAt(p.buildNoMatchError(p.maxFailPos, expected), p.maxFailPos, expected)
 		}
 
 		return nil, p.errs.err()

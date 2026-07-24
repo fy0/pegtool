@@ -15,7 +15,7 @@ func TestState(t *testing.T) {
 		got, err := Parse("", []byte(tc), Memoize(false), InitState("countCs", 10))
 
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Errorf("%s", err.Error())
 		}
 		if got != exp {
 			t.Errorf("%q: want %v, got %v", tc, exp, got)

@@ -107,7 +107,7 @@ func FindCyclesInSCC(
 	// Basic input checks.
 	if _, ok := scc[start]; !ok {
 		return nil, fmt.Errorf(
-			"%W: scc %v does not contain %q", ErrInvalidParameters, scc, start)
+			"%w: scc %v does not contain %q", ErrInvalidParameters, scc, start)
 	}
 	extravertices := []string{}
 	for k := range scc {
@@ -117,7 +117,7 @@ func FindCyclesInSCC(
 	}
 	if len(extravertices) != 0 {
 		return nil, fmt.Errorf(
-			"%W: graph does not contain scc. %v",
+			"%w: graph does not contain scc. %v",
 			ErrInvalidParameters, extravertices)
 	}
 
@@ -125,7 +125,7 @@ func FindCyclesInSCC(
 	graph = reduceGraph(graph, scc)
 	if _, ok := graph[start]; !ok {
 		return nil, fmt.Errorf(
-			"%W: graph %v does not contain %q",
+			"%w: graph %v does not contain %q",
 			ErrInvalidParameters, graph, start)
 	}
 
