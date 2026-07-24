@@ -424,7 +424,7 @@ func (r *grammarOptimizer) cleanupCharClassMatcher(expr0 Expression) Visitor {
 		if chr.IgnoreCase {
 			val.WriteString("i")
 		}
-		chr.posValue.Val = val.String()
+		chr.Val = val.String()
 	}
 	return r
 }
