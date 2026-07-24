@@ -25,6 +25,18 @@ typedef RetValOk = {
 // typedef Option = (p:Parser) -> Option; // 注: 这是个函数
 typedef Option = (p:Parser) -> Any; // 注: 这是个函数，因static编译需求返回Any
 
+// NoMatchErrorFormatter builds the error reported when parsing cannot match.
+// Returning null keeps the default no-match error.
+typedef NoMatchErrorFormatter = (position:Position, input:String, expected:Array<String>) -> Exception;
+
+function noMatchErrorFormatter(fn:NoMatchErrorFormatter):Option {
+	return function(p:Parser):Option {
+		var old = p.noMatchErrorFormatter;
+		p.noMatchErrorFormatter = fn;
+		return noMatchErrorFormatter(old);
+	}
+}
+
 // ==template== {{ if not .Optimize }}
 // Statistics adds a user provided Stats struct to the parser to allow
 // the user to process the results after the parsing has finished.
@@ -379,7 +391,7 @@ typedef ResultTuple = {
 	var end:Savepoint;
 }
 
-var choiceNoMatch = -1; // const
+var _choiceNoMatch = -1; // const
 
 // Stats stores some statistics, gathered during parsing
 typedef Stats = {
@@ -436,6 +448,7 @@ class Parser {
 	public var maxFailPos:Position;
 	public var maxFailExpected:Array<String>;
 	public var maxFailInvertExpected:Bool = false;
+	public var noMatchErrorFormatter:NoMatchErrorFormatter;
 
 	// max number of expressions to be parsed
 	public var maxExprCnt:Uint64A;
@@ -598,6 +611,17 @@ class Parser {
 			prefix: buf.getBytes().toString(),
 			expected: expected,
 		});
+	}
+
+	function buildNoMatchError(pos:Position, expected:Array<String>):Exception {
+		if (this.noMatchErrorFormatter != null) {
+			var err = this.noMatchErrorFormatter(pos, this.data, expected);
+			if (err != null) {
+				return err;
+			}
+		}
+
+		return new Exception("no match found, expected: " + listJoin(expected, ", ", "or"));
 	}
 
 	function failAt(fail:Bool, pos:Position, want:String) {
@@ -789,8 +813,7 @@ class Parser {
 				if (eof) {
 					expected.push("EOF");
 				}
-				// p.addErrAt(errors.New("no match found, expected: " + listJoin(expected, ", ", "or")), p.maxFailPos, expected)
-				this.addErrAt(new Exception("no match found, expected: " + listJoin(expected, ", ", "or")), this.maxFailPos, expected);
+				this.addErrAt(this.buildNoMatchError(this.maxFailPos, expected), this.maxFailPos, expected);
 			}
 			throw this.errs.toException();
 		}
