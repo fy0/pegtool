@@ -151,7 +151,7 @@ import haxe.iterators.StringIteratorUnicode;
 				if i > 0 {
 					args.WriteString(", ")
 				}
-				args.WriteString(fmt.Sprintf(`stack[%q]`, arg))
+				fmt.Fprintf(&args, `stack[%q]`, arg)
 			}
 		}
 
