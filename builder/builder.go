@@ -256,10 +256,10 @@ func (b *Builder) BuildParser(grammar *ast.Grammar) error {
 
 	haveLeftRecursion, err := PrepareGrammar(grammar)
 	if err != nil {
-		return fmt.Errorf("incorrect grammar: %W", err)
+		return fmt.Errorf("incorrect grammar: %w", err)
 	}
 	if haveLeftRecursion {
-		return fmt.Errorf("incorrect grammar: %W", ErrHaveLeftRecursion)
+		return fmt.Errorf("incorrect grammar: %w", ErrHaveLeftRecursion)
 	}
 	b.HaveLeftRecursion = haveLeftRecursion
 
@@ -1180,7 +1180,7 @@ func (b *Builder) Init() {
 				if i > 0 {
 					args.WriteString(", ")
 				}
-				args.WriteString(fmt.Sprintf(`stack[%q]`, arg))
+				fmt.Fprintf(&args, `stack[%q]`, arg)
 			}
 		}
 

@@ -24,7 +24,7 @@ func PrepareGrammar(grammar *ast.Grammar) (bool, error) {
 	ComputeNullables(mapRules)
 	haveLeftRecursion, err := ComputeLeftRecursives(mapRules)
 	if err != nil {
-		return false, fmt.Errorf("error compute left recursive: %W", err)
+		return false, fmt.Errorf("error compute left recursive: %w", err)
 	}
 	return haveLeftRecursion, nil
 }
@@ -48,7 +48,7 @@ func findLeader(
 	for start := range scc {
 		cycles, err := FindCyclesInSCC(graph, scc, start)
 		if err != nil {
-			return "", fmt.Errorf("error find cycles: %W", err)
+			return "", fmt.Errorf("error find cycles: %w", err)
 		}
 		for _, cycle := range cycles {
 			mapCycle := make(map[string]struct{}, len(cycle))
@@ -65,11 +65,12 @@ func findLeader(
 			}
 		}
 	}
-	// Pick an arbitrary leader from the candidates.
+	// Pick an arbitrary but stable leader from the candidates.
 	var leader string
 	for k := range leaders {
-		leader = k // The only element.
-		break
+		if leader == "" || k < leader {
+			leader = k
+		}
 	}
 	return leader, nil
 }
@@ -91,7 +92,7 @@ func ComputeLeftRecursives(rules map[string]*ast.Rule) (bool, error) {
 			}
 			leader, err := findLeader(graph, scc)
 			if err != nil {
-				return false, fmt.Errorf("error find leader %v: %W", scc, err)
+				return false, fmt.Errorf("error find leader %v: %w", scc, err)
 			}
 			rules[leader].Leader = true
 		} else {
