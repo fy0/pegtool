@@ -48,14 +48,17 @@ func TestBuilderWritesFieldsAcrossPartialLines(t *testing.T) {
 	b.WriteFieldf("first: 1,")
 	b.WriteFieldf("second: 2,")
 	b.Dedent()
-	b.WriteSpace()
 	b.Writeln("})")
 	b.Indent()
 	b.WriteFieldf("nested: ")
 	b.Writef("value\n")
 	b.Dedent()
+	b.Writef("[")
+	b.WriteItemf("one,")
+	b.WriteItemf("two,")
+	b.Writeln("]")
 
-	want := "Node({ first: 1, second: 2, })\n\tnested: value\n"
+	want := "Node({first: 1, second: 2,})\n\tnested: value\n[one, two,]\n"
 	if got := dst.String(); got != want {
 		t.Fatalf("unexpected field output:\nwant: %q\n got: %q", want, got)
 	}

@@ -13,6 +13,8 @@ type indentWriter struct {
 	unit        []byte
 	depth       int
 	atLineStart bool
+	lastByte    byte
+	hasLastByte bool
 }
 
 func newIndentWriter(dst io.Writer, unit string) *indentWriter {
@@ -31,6 +33,8 @@ func (w *indentWriter) Write(p []byte) (int, error) {
 		n, err := w.dst.Write(p)
 		if n > 0 {
 			w.atLineStart = p[n-1] == '\n'
+			w.lastByte = p[n-1]
+			w.hasLastByte = true
 		}
 		return n, err
 	}
@@ -46,6 +50,8 @@ func (w *indentWriter) Write(p []byte) (int, error) {
 		}
 
 		_ = out.WriteByte(ch)
+		w.lastByte = ch
+		w.hasLastByte = true
 		if ch == '\n' {
 			w.atLineStart = true
 		}
@@ -95,8 +101,12 @@ func (b *Builder) Dedent() {
 	}
 }
 
-func (b *Builder) writeFieldSeparator() {
-	if !b.indentWriter.atLineStart {
+func (b *Builder) writeInlineSeparator() {
+	w := b.indentWriter
+	if w.atLineStart || !w.hasLastByte {
+		return
+	}
+	if w.lastByte != '{' && w.lastByte != '[' && w.lastByte != ' ' && w.lastByte != '\t' {
 		b.Writef(" ")
 	}
 }
@@ -104,19 +114,24 @@ func (b *Builder) writeFieldSeparator() {
 // WriteFieldf writes a field, separating it from preceding content on the
 // same line while leaving line-start indentation to the writer.
 func (b *Builder) WriteFieldf(f string, args ...any) {
-	b.writeFieldSeparator()
+	b.writeInlineSeparator()
 	b.Writef(f, args...)
 }
 
 // WritelnFieldf writes a field followed by a newline.
 func (b *Builder) WritelnFieldf(f string, args ...any) {
-	b.writeFieldSeparator()
+	b.writeInlineSeparator()
 	b.Writelnf(f, args...)
 }
 
-// WriteSpace writes a space unless the writer is currently at line start.
-func (b *Builder) WriteSpace() {
-	if !b.indentWriter.atLineStart {
-		b.Writef(" ")
-	}
+// WriteItemf writes an inline or multiline collection item.
+func (b *Builder) WriteItemf(f string, args ...any) {
+	b.writeInlineSeparator()
+	b.Writef(f, args...)
+}
+
+// WritelnItemf writes a collection item followed by a newline.
+func (b *Builder) WritelnItemf(f string, args ...any) {
+	b.writeInlineSeparator()
+	b.Writelnf(f, args...)
 }
