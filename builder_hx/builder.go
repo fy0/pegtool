@@ -12,27 +12,75 @@ import (
 	base "github.com/fy0/pigeon/builder"
 )
 
-const codeGeneratedComment = "// Code is generated; DO NOT EDIT.\n\n"
+const (
+	codeGeneratedComment = "// Code is generated; DO NOT EDIT.\n"
+	maxInlineArrayWidth  = 80
+)
 
 // generated function templates
 var (
 	callCodeFuncTemplate = `private function _call{{.funcName}}(p:Parser):Any {
-{{ if .useStack }} var stack = p.vstack.first(); {{ end }}
-	var c = p.cur;
-	return (function (c:Current, {{.paramsDef}}):Any {
+{{if .useStack}}	var stack = p.vstack.first();
+{{end}}	var c = p.cur;
+	return (function(c:Current{{if .hasParams}}, {{.paramsDef}}{{end}}):Any {
 		{{.code}}
 		return null;
-	})(p.cur, {{.paramsCall}});
+	})(p.cur{{if .hasParams}}, {{.paramsCall}}{{end}});
 }
 `
 	callPredFuncTemplate = `private function _call{{.funcName}}(p:Parser):Bool {
-{{ if .useStack }} var stack = p.vstack.first(); {{ end }}
-	return (function (c:Current, {{.paramsDef}}):Bool {
+{{if .useStack}}	var stack = p.vstack.first();
+{{end}}	return (function(c:Current{{if .hasParams}}, {{.paramsDef}}{{end}}):Bool {
 		{{.code}}
-	})(p.cur, {{.paramsCall}});
+	})(p.cur{{if .hasParams}}, {{.paramsCall}}{{end}});
 }
 `
 )
+
+func haxeRuneArrayWidth(values []rune) int {
+	width := 2
+	for _, rn := range values {
+		width += len(fmt.Sprintf("0x%X, ", rn))
+	}
+	return width
+}
+
+func haxeClassArrayWidth(classes []string) int {
+	width := 2
+	for _, class := range classes {
+		width += len("Unicode.") + len(class) + len(", ")
+	}
+	return width
+}
+
+func writeHaxeRuneArray(b *base.Builder, values []rune, ignoreCase bool) {
+	multiline := haxeRuneArrayWidth(values) > maxInlineArrayWidth
+	b.WriteArray("rune", multiline, func() {
+		for _, rn := range values {
+			if ignoreCase {
+				rn = unicode.ToLower(rn)
+			}
+			if multiline {
+				b.WritelnItemf("0x%X,", rn)
+			} else {
+				b.WriteItemf("0x%X,", rn)
+			}
+		}
+	})
+}
+
+func writeHaxeClassArray(b *base.Builder, classes []string) {
+	multiline := haxeClassArrayWidth(classes) > maxInlineArrayWidth
+	b.WriteArray("*unicode.RangeTable", multiline, func() {
+		for _, class := range classes {
+			if multiline {
+				b.WritelnItemf("Unicode.%s,", class)
+			} else {
+				b.WriteItemf("Unicode.%s,", class)
+			}
+		}
+	})
+}
 
 // BuildParser builds the PEG parser using the provider grammar. The code is
 // written to the specified w.
@@ -59,16 +107,20 @@ func (b *BuilderHx) Init() {
 		}
 
 		// remove opening and closing braces
-		val := codeGeneratedComment
-		b.Writef("%s", val)
+		b.Writef("%s", codeGeneratedComment)
 		b.Writeln(`import haxe.Exception;
 import haxe.ds.GenericStack;
 import haxe.io.BytesBuffer;
 import haxe.io.Bytes;
 import haxe.ds.HashMap;
-import haxe.iterators.StringIteratorUnicode;
-`)
-		b.Writelnf(b.TemplateRender(init.Val[1:len(init.Val)-1], false))
+import haxe.iterators.StringIteratorUnicode;`)
+
+		val := strings.TrimSpace(b.TemplateRender(init.Val[1:len(init.Val)-1], false))
+		if val != "" {
+			b.Writeln("")
+			b.Writeln(val)
+		}
+		b.Writeln("")
 	}
 
 	b.Shims.WriteGrammar = func(b *base.Builder, g *ast.Grammar) {
@@ -161,12 +213,14 @@ import haxe.iterators.StringIteratorUnicode;
 			}
 		}
 
-		b.Writelnf(b.TemplateRenderBase(funcTpl, false, map[string]any{
+		b.Writeln("")
+		b.Writef("%s", b.TemplateRenderBase(funcTpl, false, map[string]any{
 			"funcName":   b.FuncName(funcIx),
 			"paramsDef":  params,
 			"code":       val,
 			"paramsCall": args.String(),
 			"useStack":   len(argsInfo) > 0,
+			"hasParams":  params != "",
 		}))
 	}
 
@@ -181,41 +235,16 @@ import haxe.iterators.StringIteratorUnicode;
 			b.WritelnFieldf("val: %q,", ch.Val)
 			if len(ch.Chars) > 0 {
 				b.WriteFieldf("chars: ")
-				b.WriteArray("rune", false, func() {
-					for _, rn := range ch.Chars {
-						if ch.IgnoreCase {
-							// b.Writef("%q.charCodeAt(0),", unicode.ToLower(rn))
-							b.Writef("0x%X,", unicode.ToLower(rn))
-						} else {
-							// b.Writef("%q.charCodeAt(0),", rn)
-							b.Writef("0x%X,", rn)
-						}
-					}
-				})
+				writeHaxeRuneArray(b, ch.Chars, ch.IgnoreCase)
 			}
 			if len(ch.Ranges) > 0 {
 				b.WriteFieldf("ranges: ")
-				b.WriteArray("rune", false, func() {
-					for _, rn := range ch.Ranges {
-						if ch.IgnoreCase {
-							// b.Writef("%q.charCodeAt(0),", unicode.ToLower(rn))
-							b.Writef("0x%X,", unicode.ToLower(rn))
-						} else {
-							// b.Writef("%q.charCodeAt(0),", rn)
-							b.Writef("0x%X,", rn)
-						}
-					}
-				})
+				writeHaxeRuneArray(b, ch.Ranges, ch.IgnoreCase)
 			}
 			if len(ch.UnicodeClasses) > 0 {
 				b.RangeTable = true
 				b.WriteFieldf("classes: ")
-				b.WriteArray("*unicode.RangeTable", false, func() {
-					for _, cl := range ch.UnicodeClasses {
-						// b.Writef("RangeTable(%q),", cl)
-						b.Writef("Unicode.%s,", cl)
-					}
-				})
+				writeHaxeClassArray(b, ch.UnicodeClasses)
 			}
 			if ch.IgnoreCase {
 				b.WritelnFieldf("ignoreCase: %t,", ch.IgnoreCase)
@@ -248,6 +277,7 @@ import haxe.iterators.StringIteratorUnicode;
 	}
 
 	b.Shims.WriteStaticCodeWrap = func(b *base.Builder) {
+		b.Writeln("")
 		b.WriteStaticCode(staticCode)
 	}
 
@@ -267,9 +297,6 @@ import haxe.iterators.StringIteratorUnicode;
 			inside()
 		}
 		b.Dedent()
-		if !newline && inside != nil {
-			b.WriteSpace()
-		}
 		b.Writef("}),\n")
 	}
 

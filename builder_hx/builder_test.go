@@ -114,7 +114,7 @@ func TestBuildParserIndentsNestedGrammar(t *testing.T) {
 	rules: [
 		{
 			name: "start",
-			expr: RuleIRefExpr({ index: 1 /* item */ }),
+			expr: RuleIRefExpr({index: 1 /* item */}),
 		},
 		{
 			name: "item",
@@ -125,10 +125,9 @@ func TestBuildParserIndentsNestedGrammar(t *testing.T) {
 						label: "value",
 						expr: OneOrMoreExpr({
 							expr: ChoiceExpr({
-								alternatives:
-								[
-									LitMatcher({ val: "a", want: "\"a\"", }),
-									LitMatcher({ val: "b", want: "\"b\"", }),
+								alternatives: [
+									LitMatcher({val: "a", want: "\"a\"",}),
+									LitMatcher({val: "b", want: "\"b\"",}),
 								],
 							}),
 						}),
@@ -145,5 +144,64 @@ func TestBuildParserIndentsNestedGrammar(t *testing.T) {
 `
 	if got := out.String(); got != want {
 		t.Fatalf("unexpected generated grammar:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+func TestBuildParserFormatsCallbacks(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader(`{
+class ParserCustomData {
+	public function new() {}
+}
+}
+start = value:"a" { return value; }
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, base.GrammarName("g")); err != nil {
+		t.Fatal(err)
+	}
+
+	generated := out.String()
+	for _, want := range []string{
+		"// Code is generated; DO NOT EDIT.\nimport haxe.Exception;",
+		"import haxe.iterators.StringIteratorUnicode;\n\nclass ParserCustomData",
+		"private function _call_onstart_1(p:Parser):Any {\n\tvar stack = p.vstack.first();\n\tvar c = p.cur;",
+		"return (function(c:Current, value:Any):Any {",
+		"})(p.cur, stack[\"value\"]);",
+	} {
+		if !strings.Contains(generated, want) {
+			t.Fatalf("generated parser missing %q", want)
+		}
+	}
+
+	for lineNo, line := range strings.Split(generated, "\n") {
+		if strings.TrimRight(line, " \t") != line {
+			t.Fatalf("line %d has trailing whitespace: %q", lineNo+1, line)
+		}
+	}
+}
+
+func TestBuildParserWrapsLongUnicodeClassArrays(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader(`start = [\p{L}\p{Other_ID_Start}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}\p{Other_ID_Continue}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, base.GrammarOnly(true), base.GrammarName("g")); err != nil {
+		t.Fatal(err)
+	}
+
+	want := `classes: [
+					Unicode.L,
+					Unicode.Other_ID_Start,
+					Unicode.Nl,`
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("generated parser missing wrapped Unicode classes:\n%s", out.String())
 	}
 }
