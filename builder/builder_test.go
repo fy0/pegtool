@@ -71,6 +71,9 @@ func TestBuildParserIncludesNoMatchFormatterHook(t *testing.T) {
 					t.Fatalf("generated parser missing snippet %q", snippet)
 				}
 			}
+			if strings.HasSuffix(generated, "\n\n") {
+				t.Fatal("generated parser has extra trailing blank lines")
+			}
 		})
 	}
 }
@@ -91,16 +94,33 @@ func TestBuildParserIndentsGrammar(t *testing.T) {
 	rules: []*rule{
 		{
 			name: "start",
-			expr: &ruleRefExpr{ name: "other", },
+			expr: &ruleRefExpr{name: "other",},
 		},
 		{
 			name: "other",
-			expr: &litMatcher{ val: "a", want: "\"a\"", },
+			expr: &litMatcher{val: "a", want: "\"a\"",},
 		},
 	},
 }
 `
 	if got := out.String(); got != want {
 		t.Fatalf("unexpected generated grammar:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}
+
+func TestBuildParserKeepsArrayLabelsInline(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader(`start = "a" / "b"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, GrammarOnly(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "alternatives: []any{"; !strings.Contains(out.String(), want) {
+		t.Fatalf("generated grammar missing %q", want)
 	}
 }

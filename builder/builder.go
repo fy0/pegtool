@@ -629,7 +629,7 @@ func (b *Builder) WriteStaticCode(code string) {
 		}
 	}
 
-	b.Writeln(buffer.String())
+	b.Writeln(strings.Trim(buffer.String(), "\r\n"))
 	// if b.RangeTable {
 	// 	b.Writeln(rangeTable0)
 	// }
@@ -871,9 +871,9 @@ func (b *Builder) Init() {
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Chars {
 						if ch.IgnoreCase {
-							b.Writef("%q,", unicode.ToLower(rn))
+							b.WriteItemf("%q,", unicode.ToLower(rn))
 						} else {
-							b.Writef("%q,", rn)
+							b.WriteItemf("%q,", rn)
 						}
 					}
 				})
@@ -883,9 +883,9 @@ func (b *Builder) Init() {
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Ranges {
 						if ch.IgnoreCase {
-							b.Writef("%q,", unicode.ToLower(rn))
+							b.WriteItemf("%q,", unicode.ToLower(rn))
 						} else {
-							b.Writef("%q,", rn)
+							b.WriteItemf("%q,", rn)
 						}
 					}
 				})
@@ -896,7 +896,7 @@ func (b *Builder) Init() {
 				b.WriteArray("*unicode.RangeTable", false, func() {
 					for _, cl := range ch.UnicodeClasses {
 						// b.Writef("RangeTable(%q),", cl)
-						b.Writef("unicode.%s,", cl)
+						b.WriteItemf("unicode.%s,", cl)
 					}
 				})
 			}
@@ -936,7 +936,7 @@ func (b *Builder) Init() {
 			pos := ch.Pos()
 			b.WriteRulePos(pos)
 			if len(ch.Alternatives) > 0 {
-				b.WritelnFieldf("alternatives:")
+				b.WriteFieldf("alternatives: ")
 				b.WriteArray("any", true, func() {
 					for _, alt := range ch.Alternatives {
 						b.WriteExpr(alt)
@@ -1057,11 +1057,11 @@ func (b *Builder) Init() {
 			b.WriteFieldf("recoverExpr: ")
 			b.WriteExpr(recover.RecoverExpr)
 
-			b.WritelnFieldf("failureLabel: ")
+			b.WriteFieldf("failureLabel: ")
 			// []string{ ... }
 			b.WriteArray("string", true, func() {
 				for _, label := range recover.Labels {
-					b.Writelnf("%q,", label)
+					b.WritelnItemf("%q,", label)
 				}
 			})
 		})
@@ -1237,9 +1237,6 @@ func (b *Builder) Init() {
 			inside()
 		}
 		b.Dedent()
-		if !newline && inside != nil {
-			b.WriteSpace()
-		}
 		b.Writef("},\n")
 	}
 
