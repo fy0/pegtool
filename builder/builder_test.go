@@ -74,6 +74,11 @@ func TestBuildParserIncludesNoMatchFormatterHook(t *testing.T) {
 			if strings.HasSuffix(generated, "\n\n") {
 				t.Fatal("generated parser has extra trailing blank lines")
 			}
+			for lineNo, line := range strings.Split(generated, "\n") {
+				if strings.TrimRight(line, " \t") != line {
+					t.Fatalf("line %d has trailing whitespace: %q", lineNo+1, line)
+				}
+			}
 		})
 	}
 }

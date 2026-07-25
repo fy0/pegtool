@@ -621,6 +621,7 @@ func (b *Builder) WriteStaticCode(code string) {
 	for _, line := range lines {
 		if !re.MatchString(line) {
 			line = reLineEnd.ReplaceAllString(line, "")
+			line = strings.TrimRight(line, " \t")
 			_, err := buffer.WriteString(line + "\n")
 			if err != nil {
 				// This is very unlikely to ever happen
