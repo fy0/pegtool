@@ -74,3 +74,33 @@ func TestBuildParserIncludesNoMatchFormatterHook(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildParserIndentsGrammar(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader("start = other\nother = \"a\""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, GrammarOnly(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	want := `var g = &grammar {
+	rules: []*rule{
+		{
+			name: "start",
+			expr: &ruleRefExpr{ name: "other", },
+		},
+		{
+			name: "other",
+			expr: &litMatcher{ val: "a", want: "\"a\"", },
+		},
+	},
+}
+`
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected generated grammar:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}

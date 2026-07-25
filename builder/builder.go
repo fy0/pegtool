@@ -139,7 +139,7 @@ func Nolint(nolint bool) Option {
 // BuildParser builds the PEG parser using the provider grammar. The code is
 // written to the specified W.
 func BuildParser(w io.Writer, g *ast.Grammar, opts ...Option) error {
-	b := &Builder{W: w, RecvName: "c", Target: "go", GrammarName: "g"}
+	b := &Builder{W: w, RecvName: "c", Target: "go", GrammarName: "g", IndentUnit: "\t"}
 	b.Init()
 	b.SetOptions(opts)
 	return b.BuildParser(g)
@@ -148,6 +148,9 @@ func BuildParser(w io.Writer, g *ast.Grammar, opts ...Option) error {
 type Builder struct {
 	W   io.Writer
 	Err error
+
+	IndentUnit   string
+	indentWriter *indentWriter
 
 	// options
 	RecvName          string
@@ -275,6 +278,9 @@ func (b *Builder) BuildParser(grammar *ast.Grammar) error {
 
 	if !b.GrammarOnly {
 		b.writeStaticCodeWrap()
+	}
+	if b.indentWriter.depth != 0 && b.Err == nil {
+		b.Err = fmt.Errorf("builder: unbalanced indentation depth %d", b.indentWriter.depth)
 	}
 
 	return b.Err
@@ -697,6 +703,7 @@ type OverrideShims struct {
 }
 
 func (b *Builder) Init() {
+	b.initIndentWriter()
 	b.GetExprInfo = GetExprInfo
 	b.CallCodeFuncTemplate = callCodeFuncTemplate
 	b.CallPredFuncTemplate = callPredFuncTemplate
@@ -725,11 +732,15 @@ func (b *Builder) Init() {
 		b.RuleName2Index = m
 
 		b.Writelnf("var %s = &grammar {", b.GrammarName)
-		b.Writelnf("\trules: []*rule{")
+		b.Indent()
+		b.WritelnFieldf("rules: []*rule{")
+		b.Indent()
 		for _, r := range g.Rules {
 			b.WriteRule(r)
 		}
-		b.Writelnf("\t},")
+		b.Dedent()
+		b.Writelnf("},")
+		b.Dedent()
 		b.Writelnf("}")
 	}
 
@@ -737,9 +748,11 @@ func (b *Builder) Init() {
 		// transform the ast grammar to the self-contained, no dependency version
 		// of the parser-generator grammar.
 		b.Writelnf("var g = map[string]*rule {")
+		b.Indent()
 		for _, r := range g.Rules {
 			b.WriteRule(r)
 		}
+		b.Dedent()
 		b.Writelnf("}")
 	}
 
@@ -760,20 +773,22 @@ func (b *Builder) Init() {
 		} else {
 			b.Writelnf("{")
 		}
-		b.Writelnf("\tname: %q,", r.Name.Val)
+		b.Indent()
+		b.WritelnFieldf("name: %q,", r.Name.Val)
 		if r.DisplayName != nil && r.DisplayName.Val != "" {
-			b.Writelnf("\tdisplayName: %q,", r.DisplayName.Val)
+			b.WritelnFieldf("displayName: %q,", r.DisplayName.Val)
 		}
 		if r.IsLabelExists {
-			b.Writelnf("\tvarExists: %t,", r.IsLabelExists)
+			b.WritelnFieldf("varExists: %t,", r.IsLabelExists)
 		}
 		b.WriteRulePos(r.Pos())
-		b.Writef("\texpr: ")
+		b.WriteFieldf("expr: ")
 		b.WriteExpr(r.Expr)
 		if b.HaveLeftRecursion {
-			b.Writelnf("\tleader: %t,", r.Leader)
-			b.Writelnf("\tleftRecursive: %t,", r.LeftRecursive)
+			b.WritelnFieldf("leader: %t,", r.Leader)
+			b.WritelnFieldf("leftRecursive: %t,", r.LeftRecursive)
 		}
+		b.Dedent()
 		b.Writelnf("},")
 	}
 
@@ -789,7 +804,7 @@ func (b *Builder) Init() {
 		// &andLogicalExpr{
 		b.Shims.WriteExprBlock(b, exprName, true, func() {
 			b.WriteRulePos(and.Pos())
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(and.Expr)
 		})
 	}
@@ -803,7 +818,7 @@ func (b *Builder) Init() {
 		if b.SetRulePos {
 			b.WriteExprBlock("anyMatcher", true, func() {
 				pos := any.Pos()
-				b.Writelnf("\tline: %d, col: %d, offset: %d,", pos.Line, pos.Col, pos.Off)
+				b.WritelnFieldf("line: %d, col: %d, offset: %d,", pos.Line, pos.Col, pos.Off)
 			})
 		} else {
 			// b.Writelnf("&anyMatcher{},")
@@ -821,8 +836,8 @@ func (b *Builder) Init() {
 		}
 		b.WriteExprBlock("actionExpr", true, func() {
 			b.WriteRulePos(act.Pos())
-			b.Writelnf("\trun: (*parser).call%s,", b.FuncName(act.FuncIx))
-			b.Writef("\texpr: ")
+			b.WritelnFieldf("run: (*parser).call%s,", b.FuncName(act.FuncIx))
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(act.Expr)
 		})
 	}
@@ -838,7 +853,7 @@ func (b *Builder) Init() {
 				and.FuncIx = b.ExprIndex
 			}
 			b.WriteRulePos(pos)
-			b.Writef("\trun: (*parser).call%s,", b.FuncName(and.FuncIx))
+			b.WriteFieldf("run: (*parser).call%s,", b.FuncName(and.FuncIx))
 		})
 	}
 
@@ -850,9 +865,9 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("charClassMatcher", true, func() {
 			pos := ch.Pos()
 			b.WriteRulePos(pos)
-			b.Writelnf("\tval: %q,", ch.Val)
+			b.WritelnFieldf("val: %q,", ch.Val)
 			if len(ch.Chars) > 0 {
-				b.Writef("\tchars:")
+				b.WriteFieldf("chars: ")
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Chars {
 						if ch.IgnoreCase {
@@ -864,7 +879,7 @@ func (b *Builder) Init() {
 				})
 			}
 			if len(ch.Ranges) > 0 {
-				b.Writef("\tranges:")
+				b.WriteFieldf("ranges: ")
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Ranges {
 						if ch.IgnoreCase {
@@ -877,7 +892,7 @@ func (b *Builder) Init() {
 			}
 			if len(ch.UnicodeClasses) > 0 {
 				b.RangeTable = true
-				b.Writef("\tclasses: ")
+				b.WriteFieldf("classes: ")
 				b.WriteArray("*unicode.RangeTable", false, func() {
 					for _, cl := range ch.UnicodeClasses {
 						// b.Writef("RangeTable(%q),", cl)
@@ -886,10 +901,10 @@ func (b *Builder) Init() {
 				})
 			}
 			if ch.IgnoreCase {
-				b.Writelnf("\tignoreCase: %t,", ch.IgnoreCase)
+				b.WritelnFieldf("ignoreCase: %t,", ch.IgnoreCase)
 			}
 			if ch.Inverted {
-				b.Writelnf("\tinverted: %t,", ch.Inverted)
+				b.WritelnFieldf("inverted: %t,", ch.Inverted)
 			}
 		})
 	}
@@ -905,9 +920,9 @@ func (b *Builder) Init() {
 				state.FuncIx = b.ExprIndex
 			}
 			b.WriteRulePos(pos)
-			b.Writelnf("\trun: (*parser).call%s,", b.FuncName(state.FuncIx))
+			b.WritelnFieldf("run: (*parser).call%s,", b.FuncName(state.FuncIx))
 			if state.NotSkip {
-				b.Writelnf("\tnotSkip: %v,", state.NotSkip)
+				b.WritelnFieldf("notSkip: %v,", state.NotSkip)
 			}
 		})
 	}
@@ -921,7 +936,7 @@ func (b *Builder) Init() {
 			pos := ch.Pos()
 			b.WriteRulePos(pos)
 			if len(ch.Alternatives) > 0 {
-				b.Writelnf("\talternatives:")
+				b.WritelnFieldf("alternatives:")
 				b.WriteArray("any", true, func() {
 					for _, alt := range ch.Alternatives {
 						b.WriteExpr(alt)
@@ -940,12 +955,12 @@ func (b *Builder) Init() {
 			pos := lab.Pos()
 			b.WriteRulePos(pos)
 			if lab.Label != nil && lab.Label.Val != "" {
-				b.Writelnf("\tlabel: %q,", lab.Label.Val)
+				b.WritelnFieldf("label: %q,", lab.Label.Val)
 			}
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(lab.Expr)
 			if lab.TextCapture {
-				b.Writelnf("\ttextCapture: %v,", lab.TextCapture)
+				b.WritelnFieldf("textCapture: %v,", lab.TextCapture)
 			}
 		})
 	}
@@ -956,9 +971,9 @@ func (b *Builder) Init() {
 			return
 		}
 
-		writeFunc := b.Writef
+		writeFunc := b.WriteFieldf
 		if b.SetRulePos {
-			writeFunc = b.Writelnf
+			writeFunc = b.WritelnFieldf
 		}
 
 		// writeFunc("&litMatcher{")
@@ -966,18 +981,18 @@ func (b *Builder) Init() {
 			pos := lit.Pos()
 			b.WriteRulePos(pos)
 			if lit.IgnoreCase {
-				writeFunc("\tval: %q,", strings.ToLower(lit.Val))
+				writeFunc("val: %q,", strings.ToLower(lit.Val))
 			} else {
-				writeFunc("\tval: %q,", lit.Val)
+				writeFunc("val: %q,", lit.Val)
 			}
 			if lit.IgnoreCase {
-				writeFunc("\tignoreCase: %t,", lit.IgnoreCase)
+				writeFunc("ignoreCase: %t,", lit.IgnoreCase)
 			}
 			ignoreCaseFlag := ""
 			if lit.IgnoreCase {
 				ignoreCaseFlag = "i"
 			}
-			writeFunc("\twant: %q,", strconv.Quote(lit.Val)+ignoreCaseFlag)
+			writeFunc("want: %q,", strconv.Quote(lit.Val)+ignoreCaseFlag)
 		})
 	}
 
@@ -992,7 +1007,7 @@ func (b *Builder) Init() {
 				not.FuncIx = b.ExprIndex
 			}
 			b.WriteRulePos(pos)
-			b.Writef("\trun: (*parser).call%s,", b.FuncName(not.FuncIx))
+			b.WriteFieldf("run: (*parser).call%s,", b.FuncName(not.FuncIx))
 		})
 	}
 
@@ -1009,7 +1024,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock(name, true, func() {
 			pos := not.Pos()
 			b.WriteRulePos(pos)
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(not.Expr)
 		})
 	}
@@ -1023,7 +1038,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("oneOrMoreExpr", true, func() {
 			pos := one.Pos()
 			b.WriteRulePos(pos)
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(one.Expr)
 		})
 	}
@@ -1037,12 +1052,12 @@ func (b *Builder) Init() {
 			pos := recover.Pos()
 			b.WriteRulePos(pos)
 
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(recover.Expr)
-			b.Writef("\trecoverExpr: ")
+			b.WriteFieldf("recoverExpr: ")
 			b.WriteExpr(recover.RecoverExpr)
 
-			b.Writelnf("\tfailureLabel: ")
+			b.WritelnFieldf("failureLabel: ")
 			// []string{ ... }
 			b.WriteArray("string", true, func() {
 				for _, label := range recover.Labels {
@@ -1067,7 +1082,7 @@ func (b *Builder) Init() {
 				b.WriteRulePos(pos)
 				if ref.Name != nil && ref.Name.Val != "" {
 					info := b.RuleName2Index[ref.Name.Val]
-					b.Writef("\tindex: %d /* %s */", info.Index, ref.Name.Val)
+					b.WriteFieldf("index: %d /* %s */", info.Index, ref.Name.Val)
 
 					if b.IRefCodeEnable {
 						exprType := info.ExprType
@@ -1084,7 +1099,7 @@ func (b *Builder) Init() {
 				pos := ref.Pos()
 				b.WriteRulePos(pos)
 				if ref.Name != nil && ref.Name.Val != "" {
-					b.Writef("\tname: %q,", ref.Name.Val)
+					b.WriteFieldf("name: %q,", ref.Name.Val)
 				}
 			})
 		}
@@ -1098,7 +1113,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("seqExpr", true, func() {
 			b.WriteRulePos(seq.Pos())
 			if len(seq.Exprs) > 0 {
-				b.Writef("\texprs: ")
+				b.WriteFieldf("exprs: ")
 				b.WriteArray("any", true, func() {
 					for _, e := range seq.Exprs {
 						b.WriteExpr(e)
@@ -1116,7 +1131,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("throwExpr", true, func() {
 			pos := throw.Pos()
 			b.WriteRulePos(pos)
-			b.Writelnf("\tlabel: %q,", throw.Label)
+			b.WritelnFieldf("label: %q,", throw.Label)
 		})
 	}
 
@@ -1128,7 +1143,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("zeroOrMoreExpr", true, func() {
 			pos := zero.Pos()
 			b.WriteRulePos(pos)
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(zero.Expr)
 		})
 	}
@@ -1142,7 +1157,7 @@ func (b *Builder) Init() {
 		b.WriteExprBlock("zeroOrOneExpr", true, func() {
 			pos := zero.Pos()
 			b.WriteRulePos(pos)
-			b.Writef("\texpr: ")
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(zero.Expr)
 		})
 	}
@@ -1195,7 +1210,7 @@ func (b *Builder) Init() {
 
 	b.Shims.WriteRulePos = func(b *Builder, pos ast.Pos) {
 		if b.SetRulePos {
-			b.Writelnf("\tpos: position{line: %d, col: %d, offset: %d},", pos.Line, pos.Col, pos.Off)
+			b.WritelnFieldf("pos: position{line: %d, col: %d, offset: %d},", pos.Line, pos.Col, pos.Off)
 		}
 	}
 
@@ -1217,8 +1232,13 @@ func (b *Builder) Init() {
 		if newline {
 			b.Writeln("")
 		}
+		b.Indent()
 		if inside != nil {
 			inside()
+		}
+		b.Dedent()
+		if !newline && inside != nil {
+			b.WriteSpace()
 		}
 		b.Writef("},\n")
 	}
@@ -1229,9 +1249,11 @@ func (b *Builder) Init() {
 		if newline {
 			b.Writeln("")
 		}
+		b.Indent()
 		if inside != nil {
 			inside()
 		}
+		b.Dedent()
 		b.Writeln("},")
 	}
 }
