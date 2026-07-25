@@ -23,10 +23,10 @@ import (
 // IMPORTANT: All code below this line is added to the parser as static code
 
 class Errors {
-    public static var errNoRule:Exception = new Exception("grammar has no rule");
-    public static var errInvalidEntrypoint:Exception = new Exception("invalid entrypoint");
-    public static var errInvalidEncoding:Exception = new Exception("invalid encoding");
-    public static var errMaxExprCnt:Exception = new Exception("max number of expressions parsed");
+	public static var errNoRule:Exception = new Exception("grammar has no rule");
+	public static var errInvalidEntrypoint:Exception = new Exception("invalid entrypoint");
+	public static var errInvalidEncoding:Exception = new Exception("invalid encoding");
+	public static var errMaxExprCnt:Exception = new Exception("max number of expressions parsed");
 }
 
 // alternative of Uint64
