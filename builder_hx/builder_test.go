@@ -91,3 +91,59 @@ func TestBuildParserOptimizesRuleReferencesByIndex(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildParserIndentsNestedGrammar(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader("start = item\nitem = value:(\"a\" / \"b\")+ !."))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(
+		&out,
+		g,
+		base.GrammarOnly(true),
+		base.GrammarName("g"),
+		base.OptimizeRefExprByIndex(true),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	want := `var g:Grammar = {
+	rules: [
+		{
+			name: "start",
+			expr: RuleIRefExpr({ index: 1 /* item */ }),
+		},
+		{
+			name: "item",
+			varExists: true,
+			expr: SeqExpr({
+				exprs: [
+					LabeledExpr({
+						label: "value",
+						expr: OneOrMoreExpr({
+							expr: ChoiceExpr({
+								alternatives:
+								[
+									LitMatcher({ val: "a", want: "\"a\"", }),
+									LitMatcher({ val: "b", want: "\"b\"", }),
+								],
+							}),
+						}),
+						textCapture: false,
+					}),
+					NotExpr({
+						expr: AnyMatcher({}),
+					}),
+				],
+			}),
+		},
+	],
+}
+`
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected generated grammar:\nwant:\n%s\ngot:\n%s", want, got)
+	}
+}

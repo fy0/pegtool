@@ -37,7 +37,7 @@ var (
 // BuildParser builds the PEG parser using the provider grammar. The code is
 // written to the specified w.
 func BuildParser(w io.Writer, g *ast.Grammar, opts ...base.Option) error {
-	b0 := base.Builder{W: w, RecvName: "c", Target: "haxe"}
+	b0 := base.Builder{W: w, RecvName: "c", Target: "haxe", IndentUnit: "\t"}
 	b := &BuilderHx{b0}
 	b.Init()
 	b.SetOptions(opts)
@@ -84,11 +84,15 @@ import haxe.iterators.StringIteratorUnicode;
 		b.RuleName2Index = m
 
 		b.Writelnf("var %s:Grammar = {", b.GrammarName)
-		b.Writelnf("\trules: [")
+		b.Indent()
+		b.WritelnFieldf("rules: [")
+		b.Indent()
 		for _, r := range g.Rules {
 			b.WriteRule(r)
 		}
-		b.Writelnf("\t],")
+		b.Dedent()
+		b.Writelnf("],")
+		b.Dedent()
 		b.Writelnf("}")
 	}
 
@@ -96,9 +100,11 @@ import haxe.iterators.StringIteratorUnicode;
 		// transform the ast grammar to the self-contained, no dependency version
 		// of the parser-generator grammar.
 		b.Writelnf("var g = {")
+		b.Indent()
 		for _, r := range g.Rules {
 			b.WriteRule(r)
 		}
+		b.Dedent()
 		b.Writelnf("}")
 	}
 
@@ -112,8 +118,8 @@ import haxe.iterators.StringIteratorUnicode;
 		}
 		b.WriteExprBlock("actionExpr", true, func() {
 			b.WriteRulePos(act.Pos())
-			b.Writelnf("\trun: _call%s,", b.Shims.FuncName(b, act.FuncIx))
-			b.Writef("\texpr: ")
+			b.WritelnFieldf("run: _call%s,", b.Shims.FuncName(b, act.FuncIx))
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(act.Expr)
 		})
 	}
@@ -172,9 +178,9 @@ import haxe.iterators.StringIteratorUnicode;
 		b.WriteExprBlock("charClassMatcher", true, func() {
 			pos := ch.Pos()
 			b.WriteRulePos(pos)
-			b.Writelnf("\tval: %q,", ch.Val)
+			b.WritelnFieldf("val: %q,", ch.Val)
 			if len(ch.Chars) > 0 {
-				b.Writef("\tchars:")
+				b.WriteFieldf("chars: ")
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Chars {
 						if ch.IgnoreCase {
@@ -188,7 +194,7 @@ import haxe.iterators.StringIteratorUnicode;
 				})
 			}
 			if len(ch.Ranges) > 0 {
-				b.Writef("\tranges:")
+				b.WriteFieldf("ranges: ")
 				b.WriteArray("rune", false, func() {
 					for _, rn := range ch.Ranges {
 						if ch.IgnoreCase {
@@ -203,7 +209,7 @@ import haxe.iterators.StringIteratorUnicode;
 			}
 			if len(ch.UnicodeClasses) > 0 {
 				b.RangeTable = true
-				b.Writef("\tclasses: ")
+				b.WriteFieldf("classes: ")
 				b.WriteArray("*unicode.RangeTable", false, func() {
 					for _, cl := range ch.UnicodeClasses {
 						// b.Writef("RangeTable(%q),", cl)
@@ -212,10 +218,10 @@ import haxe.iterators.StringIteratorUnicode;
 				})
 			}
 			if ch.IgnoreCase {
-				b.Writelnf("\tignoreCase: %t,", ch.IgnoreCase)
+				b.WritelnFieldf("ignoreCase: %t,", ch.IgnoreCase)
 			}
 			if ch.Inverted {
-				b.Writelnf("\tinverted: %t,", ch.Inverted)
+				b.WritelnFieldf("inverted: %t,", ch.Inverted)
 			}
 		})
 	}
@@ -228,16 +234,16 @@ import haxe.iterators.StringIteratorUnicode;
 		b.WriteExprBlock("labeledExpr", true, func() {
 			pos := lab.Pos()
 			b.WriteRulePos(pos)
-			b.Writelnf("\tlabel: %q,", lab.Label.Val)
-			b.Writef("\texpr: ")
+			b.WritelnFieldf("label: %q,", lab.Label.Val)
+			b.WriteFieldf("expr: ")
 			b.WriteExpr(lab.Expr)
-			b.Writelnf("\ttextCapture: %v,", lab.TextCapture)
+			b.WritelnFieldf("textCapture: %v,", lab.TextCapture)
 		})
 	}
 
 	b.Shims.WriteRulePos = func(b *base.Builder, pos ast.Pos) {
 		if b.SetRulePos {
-			b.Writelnf("\tpos: {line: %d, col: %d, offset: %d},", pos.Line, pos.Col, pos.Off)
+			b.WritelnFieldf("pos: {line: %d, col: %d, offset: %d},", pos.Line, pos.Col, pos.Off)
 		}
 	}
 
@@ -256,8 +262,13 @@ import haxe.iterators.StringIteratorUnicode;
 		if newline {
 			b.Writeln("")
 		}
+		b.Indent()
 		if inside != nil {
 			inside()
+		}
+		b.Dedent()
+		if !newline && inside != nil {
+			b.WriteSpace()
 		}
 		b.Writef("}),\n")
 	}
@@ -268,9 +279,11 @@ import haxe.iterators.StringIteratorUnicode;
 		if newline {
 			b.Writeln("")
 		}
+		b.Indent()
 		if inside != nil {
 			inside()
 		}
+		b.Dedent()
 		b.Writeln("],")
 	}
 }
