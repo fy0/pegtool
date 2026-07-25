@@ -58,3 +58,36 @@ func TestBuildParserIncludesNoMatchFormatterHook(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildParserOptimizesRuleReferencesByIndex(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader("start = other\nother = \"a\""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, base.OptimizeRefExprByIndex(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	generated := out.String()
+	for _, want := range []string{
+		"ret = this.parseRuleIRefExpr(expr);",
+		"function parseRuleIRefExpr(ref:RuleIRefExpr):RetValOk {",
+		"return this.parseRuleWrap(this.rulesArray[ref.index]);",
+	} {
+		if !strings.Contains(generated, want) {
+			t.Fatalf("generated parser missing %q", want)
+		}
+	}
+	for _, invalid := range []string{
+		"ret = p.parseRuleIRefExpr(expr)",
+		"function parseSeqExpr(ref:RuleIRefExpr):RetValOk {",
+		"return this.parseRuleWrap(this.rulesArray[ref.index])\n",
+	} {
+		if strings.Contains(generated, invalid) {
+			t.Fatalf("generated parser contains invalid Haxe code %q", invalid)
+		}
+	}
+}

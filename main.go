@@ -77,6 +77,7 @@ func main() {
 
 		altEntrypointsFlag ruleNamesFlag
 	)
+	fs.StringVar(targetFlag, "target", "go", "build target, default go")
 	fs.Var(&altEntrypointsFlag, "alternate-entrypoints", "comma-separated list of rule names that may be used as entrypoints")
 
 	fs.Usage = usage
@@ -262,7 +263,7 @@ the generated code is written to this file instead.
 		to set variable name of grammar, default is g, "var g = &grammar{ ... }"
 	-run-func-prefix
 		set prefix for generated function name: "(*parser).call_onXXX". For multiple peg files
-	-target
+	-t TARGET, -target TARGET
 		build target, default go
 
 See https://godoc.org/github.com/mna/pigeon for more information.

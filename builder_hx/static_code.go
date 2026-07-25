@@ -994,7 +994,7 @@ class Parser {
 				ret = this.parseRuleRefExpr(expr);
 			// ==template== {{ if .IRefEnable }}
 			case RuleIRefExpr(expr):
-				ret = p.parseRuleIRefExpr(expr)
+				ret = this.parseRuleIRefExpr(expr);
 			// {{ end }} ==template==
 			case SeqExpr(expr):
 				ret = this.parseSeqExpr(expr);
@@ -1288,8 +1288,8 @@ class Parser {
 	}
 
 	// {{ if .IRefEnable }}
-	function parseSeqExpr(ref:RuleIRefExpr):RetValOk {
-		return this.parseRuleWrap(this.rulesArray[ref.index])
+	function parseRuleIRefExpr(ref:RuleIRefExpr):RetValOk {
+		return this.parseRuleWrap(this.rulesArray[ref.index]);
 	}
 	// {{ end }} ==template==
 

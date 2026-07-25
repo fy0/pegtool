@@ -2,40 +2,54 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestMain(t *testing.T) {
-	stdout, stderr := os.Stdout, os.Stderr
+	args, stdout, stderr := os.Args, os.Stdout, os.Stderr
 	os.Stdout, _ = os.Open(os.DevNull)
 	os.Stderr, _ = os.Open(os.DevNull)
 	defer func() {
 		exit = os.Exit
+		os.Args = args
 		os.Stdout = stdout
 		os.Stderr = stderr
 	}()
 	exit = func(code int) {
 		panic(code)
 	}
+	grammarFile := filepath.Join(t.TempDir(), "grammar.peg")
+	if err := os.WriteFile(grammarFile, []byte(`start = "a"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	cases := []struct {
-		args string
+		args []string
 		code int
 	}{
-		{args: "", code: 3},            // stdin: no match found
-		{args: "-h", code: 0},          // help
-		{args: "FILE1 FILE2", code: 1}, // want only 1 non-flag arg
-		{args: "-x", code: 3},          // stdin: no match found
+		{args: nil, code: 3},                        // stdin: no match found
+		{args: []string{"-h"}, code: 0},             // help
+		{args: []string{"FILE1", "FILE2"}, code: 1}, // want only 1 non-flag arg
+		{args: []string{"-x"}, code: 3},             // stdin: no match found
+		{args: []string{"-t", "hx", "-x", grammarFile}},
+		{args: []string{"-target", "hx", "-x", grammarFile}},
 	}
 
 	for _, tc := range cases {
-		os.Args = append([]string{"pigeon"}, strings.Fields(tc.args)...)
+		os.Args = append([]string{"pigeon"}, tc.args...)
 
 		got := runMainRecover()
 		if got != tc.code {
 			t.Errorf("%q: want code %d, got %d", tc.args, tc.code, got)
 		}
+	}
+}
+
+func TestUsageIncludesTargetFlagAliases(t *testing.T) {
+	if want := "-t TARGET, -target TARGET"; !strings.Contains(usagePage, want) {
+		t.Fatalf("usage page missing %q", want)
 	}
 }
 
