@@ -141,44 +141,42 @@ and an expression. A labeled expression introduces a variable named with
 the label that can be referenced in the code blocks in the same scope.
 The variable will have the value of the expression that follows the colon.
 E.g.:
-	LabeledExpr = value:[a-z]+ {
+	LabeledExpr = value:<[a-z]+> {
 		fmt.Println(value)
-		return value, nil
+		return value
 	}
 
-The variable is typed as an empty interface, and the underlying type depends
-on the following:
+The variable is typed as any, and the underlying type depends on the following:
 
-For terminals (character and string literals, character classes and
-the any matcher), the value is []byte. E.g.:
-	Rule = label:'a' { // label is []byte }
+For terminals (character and string literals, character classes and the any
+matcher), the value is nil. Use a text capture to obtain the matched text. E.g.:
+	Rule = label:<'a'> // label is string
 
 For predicates (& and !), the value is always nil. E.g.:
 	Rule = label:&'a' { // label is nil }
 
-For a sequence, the value is a slice of empty interfaces, one for each
-expression value in the sequence. The underlying types of each value
-in the slice follow the same rules described here, recursively. E.g.:
-	Rule = label:('a' 'b') { // label is []any }
+For a sequence, the value is nil. Values needed by an action should be
+captured with labels or returned explicitly by nested actions. E.g.:
+	Rule = label:('a' 'b') // label is nil
 
-For a repetition (+ and *), the value is a slice of empty interfaces, one for
-each repetition. The underlying types of each value in the slice follow
-the same rules described here, recursively. E.g.:
-	Rule = label:[a-z]+ { // label is []any }
+For a repetition (+ and *), the value is a []any containing the non-nil values
+returned by the repeated expression. Repetitions that return no values have a
+nil value. E.g.:
+	Rule = label:([a-z] { return string(c.text) })+ // label is []any
 
 For a choice expression, the value is that of the matching choice. E.g.:
-	Rule = label:('a' / 'b') { // label is []byte }
+	Rule = label:(<'a'> / <'b'>) // label is string
 
 For the optional expression (?), the value is nil or the value of the
 expression. E.g.:
-	Rule = label:'a'? { // label is nil or []byte }
+	Rule = label:<'a'>? // label is nil or string
 
 Of course, the type of the value can be anything once an action code block
 is used. E.g.:
 	RuleA = label:'3' {
-		return 3, nil
+		return 3
 	}
-	RuleB = label:RuleA { // label is int }
+	RuleB = label:RuleA // label is int
 
 And and not expressions
 

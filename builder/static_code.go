@@ -406,6 +406,9 @@ type resultTuple struct {
 	end savepoint
 }
 
+// Leave room for Go's malloc header so each pointerful block fits in 8 KiB.
+const memoBlockSize = 127
+
 // {{ if .Nolint }} nolint: varcheck {{else}} ==template== {{ end }}
 const choiceNoMatch = -1
 
@@ -448,9 +451,11 @@ type parser struct {
 	// {{ end }} ==template==
 
 	// memoization table for the packrat algorithm:
-	// map[offset in source] map[expression or rule] {value, match}
-	memo1 map[int]map[any]*resultTuple
-	memo2 map[int]map[any]*resultTuple
+	// [offset in source] map[expression or rule] {value, match}
+	memo1       []map[any]*resultTuple
+	memo2       []map[any]*resultTuple
+	memoBlocks  []*[memoBlockSize]resultTuple
+	memoBlockIx int
 
 	// rules table, maps the rule identifier to the rule node
 	rules map[string]*rule
@@ -504,8 +509,6 @@ func newParser(filename string, b []byte, opts ...option) *parser {
 		maxFailPos:      position{col: 1, line: 1},
 		maxFailExpected: make([]string, 0, 20),
 		Stats:           &stats,
-		memo1: map[int]map[any]*resultTuple{},
-		memo2: map[int]map[any]*resultTuple{},
 		// start rule is rule [0] unless an alternate entrypoint is specified
 		entrypoint: "{{ .Entrypoint }}",
 		scStack: []bool{false},
@@ -936,6 +939,17 @@ func (p *parser) parseRuleWrap(rule *rule) (any, bool) {
 }
 // {{ end }} ==template==
 
+func (p *parser) newMemoizedResult(val any, ok bool) *resultTuple {
+	blockIndex := p.memoBlockIx / memoBlockSize
+	if blockIndex == len(p.memoBlocks) {
+		p.memoBlocks = append(p.memoBlocks, new([memoBlockSize]resultTuple))
+	}
+	result := &p.memoBlocks[blockIndex][p.memoBlockIx%memoBlockSize]
+	p.memoBlockIx++
+	*result = resultTuple{val, ok, p.pt}
+	return result
+}
+
 // ==template== {{ if .NeedExprWrap }}
 func (p *parser) parseExprWrap(expr any) (any, bool) {
 	val, ok := p.parseExpr(expr)
@@ -951,36 +965,24 @@ func (p *parser) {{ .ParseExprName }}(expr any) (any, bool) {
 	}
 
 	skipCode := p.checkSkipCode()
-	memo := p.memo1
-	if skipCode {
-		memo = p.memo2
-	}
-
-	setMemoized := func(pos int, expr any, val resultTuple) {
-		if !p.memoized {
-			return
-		}
-		if memo[pos] == nil {
-			memo[pos] = map[any]*resultTuple{}
-		}
-		memo[pos][expr] = &val
-	}
-
+	var memo []map[any]*resultTuple
 	if p.memoized {
-		getMemoized := func(expr any) *resultTuple {
-			pos := p.pt.offset
-			if memo[pos] == nil {
-				return nil
+		if skipCode {
+			if p.memo2 == nil {
+				p.memo2 = make([]map[any]*resultTuple, len(p.data)+1)
 			}
-			return memo[pos][expr]
+			memo = p.memo2
+		} else {
+			if p.memo1 == nil {
+				p.memo1 = make([]map[any]*resultTuple, len(p.data)+1)
+			}
+			memo = p.memo1
 		}
-
-		if m := getMemoized(expr); m != nil {
+		if m := memo[p.pt.offset][expr]; m != nil {
 			p.restore(&m.end)
 			return m.v, m.b
 		}
 	}
-
 	pos := p.pt.offset
 
 	var val any
@@ -1038,7 +1040,18 @@ func (p *parser) {{ .ParseExprName }}(expr any) (any, bool) {
 		panic(fmt.Sprintf("unknown expression type %T", expr))
 	}
 
-	setMemoized(pos, expr, resultTuple{val, ok, p.pt})
+	if p.memoized {
+		entries := memo[pos]
+		if entries == nil {
+			entries = make(map[any]*resultTuple)
+			memo[pos] = entries
+		}
+		if result := entries[expr]; result != nil {
+			*result = resultTuple{val, ok, p.pt}
+		} else {
+			entries[expr] = p.newMemoizedResult(val, ok)
+		}
+	}
 	return val, ok
 }
 
@@ -1413,22 +1426,13 @@ func (p *parser) parseSeqExpr(seq *seqExpr) (any, bool) {
 	}
 
 	// {{ end }} ==template==
-	var vals []any
-	notSkipCode := p.checkSkipCode()
-
 	pt := p.pt
 	for _, expr := range seq.exprs {
-		val, ok := p.parseExprWrap(expr)
+		_, ok := p.parseExprWrap(expr)
 		if !ok {
 			p.restore(&pt)
 			return nil, false
 		}
-		if notSkipCode && val != nil {
-			vals = append(vals, val)
-		}
-	}
-	if len(vals) > 0 {
-		return vals, true
 	}
 	return nil, true
 }
