@@ -87,9 +87,9 @@ var g = &grammar{
 					exprs: []any{
 						&labeledExpr{
 							label: "expr",
-							expr:  &ruleIRefExpr{index: 1 /* Expr */},
+							expr:  &ruleRefExpr{name: "Expr"},
 						},
-						&ruleIRefExpr{index: 8 /* EOF */},
+						&ruleRefExpr{name: "EOF"},
 					},
 				},
 			},
@@ -101,10 +101,10 @@ var g = &grammar{
 				run: (*parser).call_onExpr_1,
 				expr: &seqExpr{
 					exprs: []any{
-						&ruleIRefExpr{index: 7 /* _ */},
+						&ruleRefExpr{name: "_"},
 						&labeledExpr{
 							label: "first",
-							expr:  &ruleIRefExpr{index: 2 /* Term */},
+							expr:  &ruleRefExpr{name: "Term"},
 						},
 						&labeledExpr{
 							label: "rest",
@@ -113,22 +113,22 @@ var g = &grammar{
 									run: (*parser).call_onExpr_8,
 									expr: &seqExpr{
 										exprs: []any{
-											&ruleIRefExpr{index: 7 /* _ */},
+											&ruleRefExpr{name: "_"},
 											&labeledExpr{
 												label: "op",
-												expr:  &ruleIRefExpr{index: 4 /* AddOp */},
+												expr:  &ruleRefExpr{name: "AddOp"},
 											},
-											&ruleIRefExpr{index: 7 /* _ */},
+											&ruleRefExpr{name: "_"},
 											&labeledExpr{
 												label: "r",
-												expr:  &ruleIRefExpr{index: 2 /* Term */},
+												expr:  &ruleRefExpr{name: "Term"},
 											},
 										},
 									},
 								},
 							},
 						},
-						&ruleIRefExpr{index: 7 /* _ */},
+						&ruleRefExpr{name: "_"},
 					},
 				},
 			},
@@ -142,7 +142,7 @@ var g = &grammar{
 					exprs: []any{
 						&labeledExpr{
 							label: "first",
-							expr:  &ruleIRefExpr{index: 3 /* Factor */},
+							expr:  &ruleRefExpr{name: "Factor"},
 						},
 						&labeledExpr{
 							label: "rest",
@@ -151,15 +151,15 @@ var g = &grammar{
 									run: (*parser).call_onTerm_7,
 									expr: &seqExpr{
 										exprs: []any{
-											&ruleIRefExpr{index: 7 /* _ */},
+											&ruleRefExpr{name: "_"},
 											&labeledExpr{
 												label: "op",
-												expr:  &ruleIRefExpr{index: 5 /* MulOp */},
+												expr:  &ruleRefExpr{name: "MulOp"},
 											},
-											&ruleIRefExpr{index: 7 /* _ */},
+											&ruleRefExpr{name: "_"},
 											&labeledExpr{
 												label: "r",
-												expr:  &ruleIRefExpr{index: 3 /* Factor */},
+												expr:  &ruleRefExpr{name: "Factor"},
 											},
 										},
 									},
@@ -182,7 +182,7 @@ var g = &grammar{
 								&litMatcher{val: "(", want: "\"(\""},
 								&labeledExpr{
 									label: "expr",
-									expr:  &ruleIRefExpr{index: 1 /* Expr */},
+									expr:  &ruleRefExpr{name: "Expr"},
 								},
 								&litMatcher{val: ")", want: "\")\""},
 							},
@@ -192,7 +192,7 @@ var g = &grammar{
 						run: (*parser).call_onFactor_8,
 						expr: &labeledExpr{
 							label: "integer",
-							expr:  &ruleIRefExpr{index: 6 /* Integer */},
+							expr:  &ruleRefExpr{name: "Integer"},
 						},
 					},
 				},
@@ -403,6 +403,56 @@ func (ss *parserStack) top() *savepoint {
 // the previous setting as an option.
 type option func(*parser) option
 
+func noMatchErrorFormatter(fn func(position, []byte, []string) error) option {
+	return func(p *parser) option {
+		old := p.noMatchErrorFormatter
+		p.noMatchErrorFormatter = fn
+		return noMatchErrorFormatter(old)
+	}
+}
+
+// statistics adds a user provided Stats struct to the parser to allow
+// the user to process the results after the parsing has finished.
+// Also the key for the "no match" counter is set.
+//
+// Example usage:
+//
+//	input := "input"
+//	stats := Stats{}
+//	_, err := Parse("input-file", []byte(input), Statistics(&stats, "no match"))
+//	if err != nil {
+//	    log.Panicln(err)
+//	}
+//	b, err := json.MarshalIndent(stats.ChoiceAltCnt, "", "  ")
+//	if err != nil {
+//	    log.Panicln(err)
+//	}
+//	fmt.Println(string(b))
+func statistics(stats *Stats, choiceNoMatch string) option {
+	return func(p *parser) option {
+		oldStats := p.Stats
+		p.Stats = stats
+		oldChoiceNoMatch := p.choiceNoMatch
+		p.choiceNoMatch = choiceNoMatch
+		if p.Stats.ChoiceAltCnt == nil {
+			p.Stats.ChoiceAltCnt = make(map[string]map[string]int)
+		}
+		return statistics(oldStats, oldChoiceNoMatch)
+	}
+}
+
+// debug creates an option to set the debug flag to b. When set to true,
+// debugging information is printed to stdout while parsing.
+//
+// The default is false.
+func debug(b bool) option {
+	return func(p *parser) option {
+		old := p.debug
+		p.debug = b
+		return debug(old)
+	}
+}
+
 func memoized(b bool) option {
 	return func(p *parser) option {
 		old := p.memoized
@@ -508,11 +558,6 @@ type (
 // nolint: structcheck
 type ruleRefExpr struct {
 	name string
-}
-
-// nolint: structcheck
-type ruleIRefExpr struct {
-	index int
 }
 
 // nolint: structcheck
@@ -654,6 +699,7 @@ type parser struct {
 	depth    int
 	recover  bool
 	memoized bool
+	debug    bool
 
 	// memoization table for the packrat algorithm:
 	// map[offset in source] map[expression or rule] {value, match}
@@ -672,6 +718,7 @@ type parser struct {
 	maxFailPos            position
 	maxFailExpected       []string
 	maxFailInvertExpected bool
+	noMatchErrorFormatter func(position, []byte, []string) error
 
 	// max number of expressions to be parsed
 	maxExprCnt uint64
@@ -801,6 +848,31 @@ func (p *parser) popRecovery() {
 	p.recoveryStack = p.recoveryStack[:len(p.recoveryStack)-1]
 }
 
+func (p *parser) print(prefix, s string) string {
+	if !p.debug {
+		return s
+	}
+
+	fmt.Printf("%s %d:%d:%d: %s [%#U]\n",
+		prefix, p.pt.line, p.pt.col, p.pt.offset, s, p.pt.rn)
+	return s
+}
+
+func (p *parser) printIndent(mark string, s string) string {
+	return p.print(strings.Repeat(" ", p.depth)+mark, s)
+}
+
+func (p *parser) in(s string) string {
+	res := p.printIndent(">", s)
+	p.depth++
+	return res
+}
+
+func (p *parser) out(s string) string {
+	p.depth--
+	return p.printIndent("<", s)
+}
+
 func (p *parser) addErr(err error) {
 	if p._errPos != nil {
 		p.addErrAt(err, *p._errPos, []string{})
@@ -831,6 +903,16 @@ func (p *parser) addErrAt(err error, pos position, expected []string) {
 	}
 	pe := &parserError{Inner: err, pos: pos, prefix: buf.String(), expected: expected}
 	p.errs.add(pe)
+}
+
+func (p *parser) buildNoMatchError(pos position, expected []string) error {
+	if p.noMatchErrorFormatter != nil {
+		if err := p.noMatchErrorFormatter(pos, p.data, expected); err != nil {
+			return err
+		}
+	}
+
+	return errors.New("no match found, expected: " + listJoin(expected, ", ", "or"))
 }
 
 func (p *parser) failAt(fail bool, pos *position, want string) {
@@ -873,6 +955,9 @@ func (p *parser) read() {
 
 // restore parser position to the savepoint pt.
 func (p *parser) restore(pt *savepoint) {
+	if p.debug {
+		defer p.out(p.in("restore"))
+	}
 	if pt.offset == p.pt.offset {
 		return
 	}
@@ -914,6 +999,9 @@ func (p *parser) parse(grammar *grammar) (val any, err error) {
 		// and return the panic as an error.
 		defer func() {
 			if e := recover(); e != nil {
+				if p.debug {
+					defer p.out(p.in("panic handler"))
+				}
 				val = nil
 				switch e := e.(type) {
 				case error:
@@ -955,7 +1043,7 @@ func (p *parser) parse(grammar *grammar) (val any, err error) {
 			if eof {
 				expected = append(expected, "EOF")
 			}
-			p.addErrAt(errors.New("no match found, expected: "+listJoin(expected, ", ", "or")), p.maxFailPos, expected)
+			p.addErrAt(p.buildNoMatchError(p.maxFailPos, expected), p.maxFailPos, expected)
 		}
 
 		return nil, p.errs.err()
@@ -975,22 +1063,39 @@ func listJoin(list []string, sep string, lastSep string) string {
 }
 
 func (p *parser) parseRuleWrap(rule *rule) (any, bool) {
-	p.rstack = append(p.rstack, rule)
-	var val any
-	var ok bool
-	if rule.varExists && !p.checkSkipCode() {
-		p.pushV()
-		val, ok = p.parseExprWrap(rule.expr)
-		p.popV()
-	} else {
-		val, ok = p.parseExprWrap(rule.expr)
+	if p.debug {
+		defer p.out(p.in("parseRule " + rule.name))
 	}
+	var (
+		val       any
+		ok        bool
+		startMark = &p.pt
+	)
+
+	val, ok = p.parseRule(rule)
+
+	if ok && p.debug {
+		p.printIndent("MATCH", string(p.sliceFrom(startMark)))
+	}
+	return val, ok
+}
+
+func (p *parser) parseRule(rule *rule) (any, bool) {
+	p.rstack = append(p.rstack, rule)
+	p.pushV()
+	val, ok := p.parseExprWrap(rule.expr)
+	p.popV()
 	p.rstack = p.rstack[:len(p.rstack)-1]
 	return val, ok
 }
 
-// nolint: gocyclo
 func (p *parser) parseExprWrap(expr any) (any, bool) {
+	val, ok := p.parseExpr(expr)
+	return val, ok
+}
+
+// nolint: gocyclo
+func (p *parser) parseExpr(expr any) (any, bool) {
 	p.ExprCnt++
 	if p.ExprCnt > p.maxExprCnt {
 		panic(errMaxExprCnt)
@@ -1064,8 +1169,6 @@ func (p *parser) parseExprWrap(expr any) (any, bool) {
 		val, ok = p.parseRecoveryExpr(expr)
 	case *ruleRefExpr:
 		val, ok = p.parseRuleRefExpr(expr)
-	case *ruleIRefExpr:
-		val, ok = p.parseRuleIRefExpr(expr)
 	case *seqExpr:
 		val, ok = p.parseSeqExpr(expr)
 	case *throwExpr:
@@ -1083,6 +1186,10 @@ func (p *parser) parseExprWrap(expr any) (any, bool) {
 }
 
 func (p *parser) parseActionExpr(act *actionExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseActionExpr"))
+	}
+
 	if p.checkSkipCode() {
 		_, ok := p.parseExprWrap(act.expr)
 		return nil, ok
@@ -1100,10 +1207,17 @@ func (p *parser) parseActionExpr(act *actionExpr) (any, bool) {
 		p._errPos = nil
 		val = actVal
 	}
+	if ok && p.debug {
+		p.printIndent("MATCH", string(p.sliceFrom(&p.spStack.data[p.spStack.index+1])))
+	}
 	return val, ok
 }
 
 func (p *parser) parseAndCodeExpr(and *andCodeExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseAndCodeExpr"))
+	}
+
 	ok := and.run(p)
 	return nil, ok
 }
@@ -1117,6 +1231,10 @@ func (p *parser) parseAndLogicalExpr(and *andLogicalExpr) (any, bool) {
 }
 
 func (p *parser) parseAndExprBase(and *andExpr, logical bool) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseAndExpr"))
+	}
+
 	pt := p.pt
 
 	p.scStack = append(p.scStack, true)
@@ -1133,6 +1251,10 @@ func (p *parser) parseAndExprBase(and *andExpr, logical bool) (any, bool) {
 }
 
 func (p *parser) parseAnyMatcher(any *anyMatcher) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseAnyMatcher"))
+	}
+
 	if p.pt.rn == utf8.RuneError && p.pt.w == 0 {
 		// EOF - see utf8.DecodeRune
 		p.failAt(false, &p.pt.position, ".")
@@ -1145,6 +1267,10 @@ func (p *parser) parseAnyMatcher(any *anyMatcher) (any, bool) {
 
 // nolint: gocyclo
 func (p *parser) parseCharClassMatcher(chr *charClassMatcher) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseCharClassMatcher"))
+	}
+
 	cur := p.pt.rn
 
 	// can't match EOF
@@ -1205,6 +1331,22 @@ func (p *parser) parseCharClassMatcher(chr *charClassMatcher) (any, bool) {
 	return nil, false
 }
 
+func (p *parser) incChoiceAltCnt(ch *choiceExpr, altI int) {
+	// choiceIdent := fmt.Sprintf("%s %d:%d", p.rstack[len(p.rstack)-1].name, ch.pos.line, ch.pos.col)
+	choiceIdent := fmt.Sprintf("%s", p.rstack[len(p.rstack)-1].name)
+	m := p.ChoiceAltCnt[choiceIdent]
+	if m == nil {
+		m = make(map[string]int)
+		p.ChoiceAltCnt[choiceIdent] = m
+	}
+	// We increment altI by 1, so the keys do not start at 0
+	alt := strconv.Itoa(altI + 1)
+	if altI == choiceNoMatch {
+		alt = p.choiceNoMatch
+	}
+	m[alt]++
+}
+
 func (p *parser) parseChoiceExpr(ch *choiceExpr) (any, bool) {
 	for altI, alt := range ch.alternatives {
 		// dummy assignment to prevent compile error if optimized
@@ -1212,13 +1354,19 @@ func (p *parser) parseChoiceExpr(ch *choiceExpr) (any, bool) {
 
 		val, ok := p.parseExprWrap(alt)
 		if ok {
+			p.incChoiceAltCnt(ch, altI)
 			return val, ok
 		}
 	}
+	p.incChoiceAltCnt(ch, choiceNoMatch)
 	return nil, false
 }
 
 func (p *parser) parseLabeledExpr(lab *labeledExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseLabeledExpr"))
+	}
+
 	startOffset := p.pt.position.offset
 	var val any
 	var ok bool
@@ -1235,6 +1383,10 @@ func (p *parser) parseLabeledExpr(lab *labeledExpr) (any, bool) {
 }
 
 func (p *parser) parseCodeExpr(code *codeExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseCodeExpr"))
+	}
+
 	if !code.notSkip && p.checkSkipCode() {
 		return nil, true
 	}
@@ -1242,6 +1394,10 @@ func (p *parser) parseCodeExpr(code *codeExpr) (any, bool) {
 }
 
 func (p *parser) parseLitMatcher(lit *litMatcher) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseLitMatcher"))
+	}
+
 	start := p.pt
 	for _, want := range lit.val {
 		cur := p.pt.rn
@@ -1260,6 +1416,10 @@ func (p *parser) parseLitMatcher(lit *litMatcher) (any, bool) {
 }
 
 func (p *parser) parseNotCodeExpr(not *notCodeExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseNotCodeExpr"))
+	}
+
 	ok := not.run(p)
 	return nil, !ok
 }
@@ -1273,6 +1433,10 @@ func (p *parser) parseNotLogicalExpr(not *notLogicalExpr) (any, bool) {
 }
 
 func (p *parser) parseNotExprBase(not *notExpr, logical bool) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseNotExpr"))
+	}
+
 	pt := p.pt
 	p.maxFailInvertExpected = !p.maxFailInvertExpected
 
@@ -1291,6 +1455,10 @@ func (p *parser) parseNotExprBase(not *notExpr, logical bool) (any, bool) {
 }
 
 func (p *parser) parseOneOrMoreExpr(expr *oneOrMoreExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseOneOrMoreExpr"))
+	}
+
 	var vals []any
 	var matched bool
 	for {
@@ -1309,6 +1477,10 @@ func (p *parser) parseOneOrMoreExpr(expr *oneOrMoreExpr) (any, bool) {
 }
 
 func (p *parser) parseRecoveryExpr(recover *recoveryExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseRecoveryExpr (" + strings.Join(recover.failureLabel, ",") + ")"))
+	}
+
 	p.pushRecovery(recover.failureLabel, recover.recoverExpr)
 	val, ok := p.parseExprWrap(recover.expr)
 	p.popRecovery()
@@ -1317,6 +1489,10 @@ func (p *parser) parseRecoveryExpr(recover *recoveryExpr) (any, bool) {
 }
 
 func (p *parser) parseRuleRefExpr(ref *ruleRefExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseRuleRefExpr " + ref.name))
+	}
+
 	rule := p.rules[ref.name]
 	if rule == nil {
 		p.addErr(fmt.Errorf("undefined rule: %s", ref.name))
@@ -1325,11 +1501,11 @@ func (p *parser) parseRuleRefExpr(ref *ruleRefExpr) (any, bool) {
 	return p.parseRuleWrap(rule)
 }
 
-func (p *parser) parseRuleIRefExpr(ref *ruleIRefExpr) (any, bool) {
-	return p.parseRuleWrap(p.rulesArray[ref.index])
-}
-
 func (p *parser) parseSeqExpr(seq *seqExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseSeqExpr"))
+	}
+
 	var vals []any
 	notSkipCode := p.checkSkipCode()
 
@@ -1351,6 +1527,10 @@ func (p *parser) parseSeqExpr(seq *seqExpr) (any, bool) {
 }
 
 func (p *parser) parseThrowExpr(expr *throwExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseThrowExpr"))
+	}
+
 	for i := len(p.recoveryStack) - 1; i >= 0; i-- {
 		if recoverExpr, ok := p.recoveryStack[i][expr.label]; ok {
 			if val, ok := p.parseExprWrap(recoverExpr); ok {
@@ -1362,6 +1542,10 @@ func (p *parser) parseThrowExpr(expr *throwExpr) (any, bool) {
 }
 
 func (p *parser) parseZeroOrMoreExpr(expr *zeroOrMoreExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseZeroOrMoreExpr"))
+	}
+
 	var vals []any
 	for {
 		val, ok := p.parseExprWrap(expr.expr)
@@ -1378,6 +1562,10 @@ func (p *parser) parseZeroOrMoreExpr(expr *zeroOrMoreExpr) (any, bool) {
 }
 
 func (p *parser) parseZeroOrOneExpr(expr *zeroOrOneExpr) (any, bool) {
+	if p.debug {
+		defer p.out(p.in("parseZeroOrOneExpr"))
+	}
+
 	val, _ := p.parseExprWrap(expr.expr)
 	// whether it matched or not, consider it a match
 	return val, true

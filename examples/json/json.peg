@@ -1,10 +1,36 @@
 {
 // Package json parses JSON as defined by [1].
 //
-// BUGS: the escaped forward solidus (`\/`) is not currently handled.
-//
 // [1]: http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf
 package json
+
+type ParserCustomData struct{}
+
+type Option = option
+
+func Memoize(enabled bool) Option {
+    return memoized(enabled)
+}
+
+func Parse(filename string, data []byte, opts ...Option) (any, error) {
+    return parse(filename, data, opts...)
+}
+
+func ParseFile(filename string, opts ...Option) (any, error) {
+    data, err := os.ReadFile(filename)
+    if err != nil {
+        return nil, err
+    }
+    return Parse(filename, data, opts...)
+}
+
+func ParseReader(filename string, reader io.Reader, opts ...Option) (any, error) {
+    data, err := io.ReadAll(reader)
+    if err != nil {
+        return nil, err
+    }
+    return Parse(filename, data, opts...)
+}
 
 func toAnySlice(v any) []any {
     if v == nil {
@@ -15,46 +41,54 @@ func toAnySlice(v any) []any {
 }
 
 JSON ← _ val:Value EOF {
-    return val, nil
+    return val
 }
 
 Value ← val:( Object / Array / Number / String / Bool / Null ) _ {
-    return val, nil
+    return val
 }
 
-Object ← '{' _ vals:( String _ ':' _ Value ( ',' _ String _ ':' _ Value )* )? '}' {
+Object ← '{' _ members:( first:Member rest:( ',' _ member:Member { return member } )* { return []any{first, rest} } )? '}' {
     res := make(map[string]any)
-    valsSl := toAnySlice(vals)
-    if len(valsSl) == 0 {
-        return res, nil
+    if members == nil {
+        return res
     }
-    res[valsSl[0].(string)] = valsSl[4]
-    restSl := toAnySlice(valsSl[5])
-    for _, v := range restSl {
-        vSl := toAnySlice(v)
-        res[vSl[2].(string)] = vSl[6]
+    values := members.([]any)
+    pair := values[0].([]any)
+    res[pair[0].(string)] = pair[1]
+    for _, item := range toAnySlice(values[1]) {
+        pair = item.([]any)
+        res[pair[0].(string)] = pair[1]
     }
-    return res, nil
+    return res
 }
 
-Array ← '[' _ vals:( Value ( ',' _ Value )* )? ']' {
-    valsSl := toAnySlice(vals)
-    if len(valsSl) == 0 {
-        return []any{}, nil
+Member ← key:String _ ':' _ value:Value {
+    return []any{key, value}
+}
+
+Array ← '[' _ values:( first:( value:Value { return []any{value} } ) rest:( ',' _ value:Value { return []any{value} } )* { return []any{first, rest} } )? ']' {
+    res := []any{}
+    if values == nil {
+        return res
     }
-    res := []any{valsSl[0]}
-    restSl := toAnySlice(valsSl[1])
-    for _, v := range restSl {
-        vSl := toAnySlice(v)
-        res = append(res, vSl[2])
+    items := values.([]any)
+    res = append(res, items[0].([]any)[0])
+    for _, item := range toAnySlice(items[1]) {
+        res = append(res, item.([]any)[0])
     }
-    return res, nil
+    return res
 }
 
 Number ← '-'? Integer ( '.' DecimalDigit+ )? Exponent? {
     // JSON numbers have the same syntax as Go's, and are parseable using
     // strconv.
-    return strconv.ParseFloat(string(c.text), 64)
+    value, err := strconv.ParseFloat(string(c.text), 64)
+    if err != nil {
+        p.addErr(err)
+        return nil
+    }
+    return value
 }
 
 Integer ← '0' / NonZeroDecimalDigit DecimalDigit*
@@ -63,7 +97,12 @@ Exponent ← 'e'i [+-]? DecimalDigit+
 
 String ← '"' ( !EscapedChar . / '\\' EscapeSequence )* '"' {
     c.text = bytes.Replace(c.text, []byte(`\/`), []byte(`/`), -1)
-    return strconv.Unquote(string(c.text))
+    value, err := strconv.Unquote(string(c.text))
+    if err != nil {
+        p.addErr(err)
+        return nil
+    }
+    return value
 }
 
 EscapedChar ← [\x00-\x1f"\\]
@@ -80,9 +119,9 @@ NonZeroDecimalDigit ← [1-9]
 
 HexDigit ← [0-9a-f]i
 
-Bool ← "true" { return true, nil } / "false" { return false, nil }
+Bool ← "true" { return true } / "false" { return false }
 
-Null ← "null" { return nil, nil }
+Null ← "null" { return nil }
 
 _ "whitespace" ← [ \t\r\n]*
 

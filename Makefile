@@ -70,14 +70,14 @@ $(BOOTSTRAP_GRAMMAR):
 $(PIGEON_GRAMMAR):
 
 # surely there's a better way to define the examples and test targets
-$(EXAMPLES_DIR)/json/json.go: $(EXAMPLES_DIR)/json/json.peg $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/optimized-grammar/json.go $(BINDIR)/pigeon
+$(EXAMPLES_DIR)/json/json.go: $(EXAMPLES_DIR)/json/json.peg $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/indexed/json.go $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
 
 $(EXAMPLES_DIR)/json/optimized/json.go: $(EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser -optimize-basic-latin $< > $@
+	$(BINDIR)/pigeon -nolint -optimize-parser $< > $@
 
-$(EXAMPLES_DIR)/json/optimized-grammar/json.go: $(EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar $< > $@
+$(EXAMPLES_DIR)/json/indexed/json.go: $(EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -nolint -optimize-ref-expr-by-index $< > $@
 
 $(EXAMPLES_DIR)/calculator/calculator.go: $(EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
@@ -248,8 +248,7 @@ test:
 
 clean:
 	rm -f $(BUILDER_DIR)/generated_static_code.go $(BUILDER_DIR)/generated_static_code_range_table.go
-	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/optimized-grammar/json.go $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
+	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/indexed/json.go $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
 	rm -rf $(BINDIR)
 
 .PHONY: all clean lint cmp test
-

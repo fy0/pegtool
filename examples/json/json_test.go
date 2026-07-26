@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	indexed "github.com/fy0/pigeon/examples/json/indexed"
 	optimized "github.com/fy0/pigeon/examples/json/optimized"
-	optimizedgrammar "github.com/fy0/pigeon/examples/json/optimized-grammar"
 )
 
 func TestCmpStdlib(t *testing.T) {
@@ -26,9 +26,9 @@ func TestCmpStdlib(t *testing.T) {
 			continue
 		}
 
-		poggot, err := optimizedgrammar.ParseFile(file)
+		pigot, err := indexed.ParseFile(file)
 		if err != nil {
-			t.Errorf("%s: optimizedgrammar.ParseFile: %v", file, err)
+			t.Errorf("%s: indexed.ParseFile: %v", file, err)
 			continue
 		}
 
@@ -53,8 +53,8 @@ func TestCmpStdlib(t *testing.T) {
 			continue
 		}
 
-		if !reflect.DeepEqual(poggot, jgot) {
-			t.Errorf("%s: optimized grammar not equal", file)
+		if !reflect.DeepEqual(pigot, jgot) {
+			t.Errorf("%s: indexed rules not equal", file)
 			continue
 		}
 	}
@@ -84,7 +84,7 @@ func TestChoiceAltStatistics(t *testing.T) {
 		{
 			json: `{}`,
 			expectedStats: map[string]map[string]int{
-				"Value 21:15": {
+				"Value": {
 					"1": 1,
 				},
 			},
@@ -92,15 +92,15 @@ func TestChoiceAltStatistics(t *testing.T) {
 		{
 			json: `{ "string": "string", "number": 123 }`,
 			expectedStats: map[string]map[string]int{
-				"Integer 60:11": {
+				"Integer": {
 					"2":        1,
 					"no match": 1,
 				},
-				"String 64:16": {
+				"String": {
 					"1":        18,
 					"no match": 3,
 				},
-				"Value 21:15": {
+				"Value": {
 					"1": 1,
 					"3": 1,
 					"4": 1,
@@ -125,6 +125,43 @@ func TestZeroZero(t *testing.T) {
 	_, err := Parse(`fuzz`, []byte(`00`))
 	if err == nil {
 		t.Errorf("Error expected for invalid input: `00`")
+	}
+}
+
+func TestNullValues(t *testing.T) {
+	for _, input := range []string{
+		`null`,
+		`[null]`,
+		`[1, null, 2]`,
+		`{"value": null}`,
+	} {
+		var want any
+		if err := json.Unmarshal([]byte(input), &want); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := Parse("test", []byte(input))
+		if err != nil {
+			t.Fatalf("default parser: %q: %v", input, err)
+		}
+		optimizedGot, err := optimized.Parse("test", []byte(input))
+		if err != nil {
+			t.Fatalf("optimized parser: %q: %v", input, err)
+		}
+		indexedGot, err := indexed.Parse("test", []byte(input))
+		if err != nil {
+			t.Fatalf("indexed parser: %q: %v", input, err)
+		}
+
+		for name, value := range map[string]any{
+			"default":   got,
+			"optimized": optimizedGot,
+			"indexed":   indexedGot,
+		} {
+			if !reflect.DeepEqual(value, want) {
+				t.Errorf("%s parser: %q: want %#v, got %#v", name, input, want, value)
+			}
+		}
 	}
 }
 
@@ -179,7 +216,7 @@ func BenchmarkPigeonJSONOptimized(b *testing.B) {
 	}
 }
 
-func BenchmarkPigeonJSONOptimizedGrammar(b *testing.B) {
+func BenchmarkPigeonJSONIndexedRules(b *testing.B) {
 	d, err := os.ReadFile("testdata/github-octokit-repos.json")
 	if err != nil {
 		b.Fatal(err)
@@ -187,7 +224,7 @@ func BenchmarkPigeonJSONOptimizedGrammar(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := optimizedgrammar.Parse("", d); err != nil {
+		if _, err := indexed.Parse("", d); err != nil {
 			b.Fatal(err)
 		}
 	}
