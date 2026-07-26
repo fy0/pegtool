@@ -1,0 +1,14 @@
+{
+const OPERATORS: [&str; 2] = ["+", "%"];
+
+fn is_operator(value: &Value) -> bool {
+    value
+        .as_str()
+        .map(|value| OPERATORS.contains(&value))
+        .unwrap_or(false)
+}
+}
+
+op <- value:<[^ \n\t\ra-zA-Z0-9]+>
+    &{ return is_operator(&value); }
+    { return Value::String(c.text.clone()); }

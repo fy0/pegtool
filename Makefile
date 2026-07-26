@@ -8,6 +8,8 @@ ROOT = .
 ROOT_SRC = $(ROOT)/*.go
 BINDIR = ./bin
 EXAMPLES_DIR = $(ROOT)/examples
+GO_EXAMPLES_DIR = $(EXAMPLES_DIR)/go
+RUST_EXAMPLES_DIR = $(EXAMPLES_DIR)/rust
 TEST_DIR = $(ROOT)/test
 
 # builder and ast packages
@@ -31,13 +33,26 @@ GRAMMAR_DIR = $(ROOT)/grammar
 BOOTSTRAP_GRAMMAR = $(GRAMMAR_DIR)/bootstrap.peg
 PIGEON_GRAMMAR = $(GRAMMAR_DIR)/pigeon.peg
 
-TEST_GENERATED_SRC = $(patsubst %.peg,%.go,$(shell echo ./{examples,test}/**/*.peg))
+TEST_GENERATED_SRC = $(patsubst %.peg,%.go,$(shell echo ./test/**/*.peg))
+GO_EXAMPLE_GENERATED_SRC = \
+	$(GO_EXAMPLES_DIR)/calculator/calculator.go \
+	$(GO_EXAMPLES_DIR)/indentation/indentation.go \
+	$(GO_EXAMPLES_DIR)/json/json.go \
+	$(GO_EXAMPLES_DIR)/json/indexed/json.go \
+	$(GO_EXAMPLES_DIR)/json/optimized/json.go \
+	$(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg.go
+RUST_EXAMPLE_GENERATED_SRC = \
+	$(RUST_EXAMPLES_DIR)/calculator/src/parser.rs \
+	$(RUST_EXAMPLES_DIR)/indentation/src/parser.rs \
+	$(RUST_EXAMPLES_DIR)/json/src/parser.rs \
+	$(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs
 
 all: $(BUILDER_DIR)/generated_static_code.go $(BINDIR)/static_code_generator \
 	$(BUILDER_DIR)/generated_static_code_range_table.go \
 	$(BINDIR)/bootstrap-build $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go \
 	$(BINDIR)/bootstrap-pigeon $(ROOT)/pigeon.go $(BINDIR)/pigeon \
-	$(TEST_GENERATED_SRC)
+	$(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) \
+	$(RUST_EXAMPLE_GENERATED_SRC)
 
 $(BINDIR)/static_code_generator: $(STATICCODEGENERATOR_SRC)
 	go build -o $@ $(STATICCODEGENERATOR_DIR)
@@ -70,20 +85,35 @@ $(BOOTSTRAP_GRAMMAR):
 $(PIGEON_GRAMMAR):
 
 # surely there's a better way to define the examples and test targets
-$(EXAMPLES_DIR)/json/json.go: $(EXAMPLES_DIR)/json/json.peg $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/indexed/json.go $(BINDIR)/pigeon
+$(GO_EXAMPLES_DIR)/json/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(GO_EXAMPLES_DIR)/json/optimized/json.go $(GO_EXAMPLES_DIR)/json/indexed/json.go $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
 
-$(EXAMPLES_DIR)/json/optimized/json.go: $(EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
+$(GO_EXAMPLES_DIR)/json/optimized/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint -optimize-parser $< > $@
 
-$(EXAMPLES_DIR)/json/indexed/json.go: $(EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
+$(GO_EXAMPLES_DIR)/json/indexed/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint -optimize-ref-expr-by-index $< > $@
 
-$(EXAMPLES_DIR)/calculator/calculator.go: $(EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
+$(GO_EXAMPLES_DIR)/calculator/calculator.go: $(GO_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
 
-$(EXAMPLES_DIR)/indentation/indentation.go: $(EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pigeon
+$(GO_EXAMPLES_DIR)/indentation/indentation.go: $(GO_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
+
+$(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg.go: $(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -nolint $< > $@
+
+$(RUST_EXAMPLES_DIR)/calculator/src/parser.rs: $(RUST_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t rust -o $@ $<
+
+$(RUST_EXAMPLES_DIR)/indentation/src/parser.rs: $(RUST_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t rust -o $@ $<
+
+$(RUST_EXAMPLES_DIR)/json/src/parser.rs: $(RUST_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t rust -o $@ $<
+
+$(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs: $(RUST_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t rust -o $@ $<
 
 $(TEST_DIR)/andnot/andnot.go: $(TEST_DIR)/andnot/andnot.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
@@ -248,7 +278,8 @@ test:
 
 clean:
 	rm -f $(BUILDER_DIR)/generated_static_code.go $(BUILDER_DIR)/generated_static_code_range_table.go
-	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(EXAMPLES_DIR)/json/optimized/json.go $(EXAMPLES_DIR)/json/indexed/json.go $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
+	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) $(RUST_EXAMPLE_GENERATED_SRC) $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
+	rm -rf $(RUST_EXAMPLES_DIR)/target
 	rm -rf $(BINDIR)
 
 .PHONY: all clean lint cmp test

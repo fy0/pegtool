@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "calculator",
+    "indentation",
+    "json",
+    "predicate_code",
+]
+resolver = "2"

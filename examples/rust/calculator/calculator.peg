@@ -1,0 +1,62 @@
+{
+fn integer(value: &Value) -> i64 {
+    match value {
+        Value::Int(value) => *value,
+        other => panic!("expected integer, got {:?}", other),
+    }
+}
+
+fn evaluate(first: Value, rest: Value) -> Value {
+    let mut result = integer(&first);
+    if let Value::Array(items) = rest {
+        for item in items {
+            let pair = item.as_array().expect("operator pair");
+            let operator = pair[0].as_str().expect("operator");
+            let right = integer(&pair[1]);
+            result = match operator {
+                "+" => result + right,
+                "-" => result - right,
+                "*" => result * right,
+                "/" => result / right,
+                _ => panic!("unknown operator {operator}"),
+            };
+        }
+    }
+    Value::Int(result)
+}
+}
+
+Input <- expression:Expr EOF { return expression; }
+
+Expr <- _ first:Term rest:( _ operator:AddOp _ right:Term {
+    return Value::Array(vec![operator, right]);
+})* _ {
+    return evaluate(first, rest);
+}
+
+Term <- first:Factor rest:( _ operator:MulOp _ right:Factor {
+    return Value::Array(vec![operator, right]);
+})* {
+    return evaluate(first, rest);
+}
+
+Factor <- '(' expression:Expr ')' { return expression; }
+        / integer:Integer { return integer; }
+
+AddOp <- ('+' / '-') { return Value::String(c.text.clone()); }
+
+MulOp <- ('*' / '/') { return Value::String(c.text.clone()); }
+
+Integer <- '-'? [0-9]+ {
+    match c.text.parse::<i64>() {
+        Ok(value) => return Value::Int(value),
+        Err(error) => {
+            p.add_err(error);
+            return Value::Null;
+        }
+    }
+}
+
+_ "whitespace" <- [ \n\t\r]*
+
+EOF <- !.

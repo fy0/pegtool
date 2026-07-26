@@ -5,6 +5,7 @@
 *.dylib
 pigeon
 bin/
+examples/rust/target/
 bootstrap/cmd/bootstrap-pigeon/bootstrap-pigeon
 bootstrap/cmd/bootstrap-build/bootstrap-build
 bootstrap/cmd/pegscan/pegscan

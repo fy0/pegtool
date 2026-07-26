@@ -1,0 +1,24 @@
+{
+//nolint:unreachable
+package main
+
+{{ if not .GrammarOnly }}
+
+type ParserCustomData struct {
+}
+
+const (
+  plus = "+"
+  percent = "%"
+)
+func Operators() []string { return []string{plus, percent} }
+
+func ContainsInSlice(slice []string, item string) bool {
+	return strings.Contains(strings.Join(slice, ""), item)
+}
+{{ end }}
+}
+
+op <- val:<[^ \n\t\ra-zA-Z0-9]+>
+	&{ return ContainsInSlice(Operators(), val.(string)) }
+	{ return string(c.text) }

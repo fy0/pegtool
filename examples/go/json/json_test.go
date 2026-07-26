@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	indexed "github.com/fy0/pigeon/examples/json/indexed"
-	optimized "github.com/fy0/pigeon/examples/json/optimized"
+	indexed "github.com/fy0/pigeon/examples/go/json/indexed"
+	optimized "github.com/fy0/pigeon/examples/go/json/optimized"
 )
 
 func TestCmpStdlib(t *testing.T) {

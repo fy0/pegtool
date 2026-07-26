@@ -453,7 +453,7 @@ and an optional error.
 
 Typically, the grammar should generate some kind of abstract syntax tree (AST),
 but for simple grammars it may evaluate the result immediately, such as in
-the examples/calculator example. There are no constraints imposed on the
+the examples/go/calculator example. There are no constraints imposed on the
 author of the grammar, it can return whatever is needed.
 
 Error reporting
@@ -487,7 +487,7 @@ parsing. The panic will be caught at the top-level of the Parse* call
 and will be converted into a *parserError like any error, and an errList
 will still be returned to the caller.
 
-The divide by zero error in the examples/calculator grammar leverages this
+The divide by zero error in the examples/go/calculator grammar leverages this
 feature (no special code is needed to handle division by zero, if it
 happens, the runtime panics and it is recovered and returned as a parsing
 error).
@@ -526,7 +526,7 @@ command line tools).
 One possible implementation for exported errors (based on interfaces) and
 customized error reporting (caret style formatting of the position, where
 the parsing failed) is available in the json example and its command line tool:
-http://godoc.org/github.com/mna/pigeon/examples/json
+https://pkg.go.dev/github.com/fy0/pigeon/examples/go/json
 
 API stability
 

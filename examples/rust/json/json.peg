@@ -1,0 +1,168 @@
+{
+fn insert_member(result: &mut BTreeMap<String, Value>, member: &Value) {
+    let pair = member.as_array().expect("object member");
+    let key = pair[0].as_str().expect("object key").to_string();
+    result.insert(key, pair[1].clone());
+}
+
+fn object_value(members: Value) -> Value {
+    let mut result = BTreeMap::new();
+    if let Value::Array(group) = members {
+        insert_member(&mut result, &group[0]);
+        if let Value::Array(rest) = &group[1] {
+            for member in rest {
+                insert_member(&mut result, member);
+            }
+        }
+    }
+    Value::Object(result)
+}
+
+fn unwrap_array_value(value: &Value) -> Value {
+    value
+        .as_array()
+        .and_then(|values| values.first())
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+fn array_value(values: Value) -> Value {
+    let mut result = Vec::new();
+    if let Value::Array(group) = values {
+        result.push(unwrap_array_value(&group[0]));
+        if let Value::Array(rest) = &group[1] {
+            result.extend(rest.iter().map(unwrap_array_value));
+        }
+    }
+    Value::Array(result)
+}
+
+fn read_hex(chars: &mut impl Iterator<Item = char>) -> Result<u16, String> {
+    let mut value = 0_u16;
+    for _ in 0..4 {
+        let digit = chars
+            .next()
+            .and_then(|value| value.to_digit(16))
+            .ok_or_else(|| "invalid Unicode escape".to_string())?;
+        value = value * 16 + digit as u16;
+    }
+    Ok(value)
+}
+
+fn decode_json_string(input: &str) -> Result<String, String> {
+    if input.len() < 2 {
+        return Err("unterminated JSON string".to_string());
+    }
+    let mut chars = input[1..input.len() - 1].chars();
+    let mut result = String::new();
+    while let Some(value) = chars.next() {
+        if value != '\\' {
+            result.push(value);
+            continue;
+        }
+        match chars.next().ok_or_else(|| "unterminated escape".to_string())? {
+            '"' => result.push('"'),
+            '\\' => result.push('\\'),
+            '/' => result.push('/'),
+            'b' => result.push('\u{0008}'),
+            'f' => result.push('\u{000c}'),
+            'n' => result.push('\n'),
+            'r' => result.push('\r'),
+            't' => result.push('\t'),
+            'u' => {
+                let first = read_hex(&mut chars)?;
+                let code_point = if (0xd800..=0xdbff).contains(&first) {
+                    if chars.next() != Some('\\') || chars.next() != Some('u') {
+                        return Err("missing low surrogate".to_string());
+                    }
+                    let second = read_hex(&mut chars)?;
+                    if !(0xdc00..=0xdfff).contains(&second) {
+                        return Err("invalid low surrogate".to_string());
+                    }
+                    0x10000 + (((first as u32 - 0xd800) << 10) | (second as u32 - 0xdc00))
+                } else if (0xdc00..=0xdfff).contains(&first) {
+                    return Err("unexpected low surrogate".to_string());
+                } else {
+                    first as u32
+                };
+                result.push(char::from_u32(code_point).ok_or_else(|| "invalid Unicode scalar".to_string())?);
+            }
+            value => return Err(format!("invalid escape {value}")),
+        }
+    }
+    Ok(result)
+}
+}
+
+JSON <- _ value:Value EOF { return value; }
+
+Value <- value:(Object / Array / Number / String / Bool / Null) _ { return value; }
+
+Object <- '{' _ members:( first:Member rest:( ',' _ member:Member {
+    return member;
+})* {
+    return Value::Array(vec![first, rest]);
+})? '}' {
+    return object_value(members);
+}
+
+Member <- key:String _ ':' _ value:Value {
+    return Value::Array(vec![key, value]);
+}
+
+Array <- '[' _ values:( first:( value:Value {
+    return Value::Array(vec![value]);
+}) rest:( ',' _ value:Value {
+    return Value::Array(vec![value]);
+})* {
+    return Value::Array(vec![first, rest]);
+})? ']' {
+    return array_value(values);
+}
+
+Number <- '-'? Integer ('.' DecimalDigit+)? Exponent? {
+    match c.text.parse::<f64>() {
+        Ok(value) => return Value::Float(value),
+        Err(error) => {
+            p.add_err(error);
+            return Value::Null;
+        }
+    }
+}
+
+Integer <- '0' / NonZeroDecimalDigit DecimalDigit*
+
+Exponent <- 'e'i [+-]? DecimalDigit+
+
+String <- '"' (!EscapedChar . / '\\' EscapeSequence)* '"' {
+    match decode_json_string(&c.text) {
+        Ok(value) => return Value::String(value),
+        Err(error) => {
+            p.add_err(error);
+            return Value::Null;
+        }
+    }
+}
+
+EscapedChar <- [\x00-\x1f"\\]
+
+EscapeSequence <- SingleCharEscape / UnicodeEscape
+
+SingleCharEscape <- ["\\/bfnrt]
+
+UnicodeEscape <- 'u' HexDigit HexDigit HexDigit HexDigit
+
+DecimalDigit <- [0-9]
+
+NonZeroDecimalDigit <- [1-9]
+
+HexDigit <- [0-9a-f]i
+
+Bool <- "true" { return Value::Bool(true); }
+      / "false" { return Value::Bool(false); }
+
+Null <- "null" { return Value::Null; }
+
+_ "whitespace" <- [ \t\r\n]*
+
+EOF <- !.

@@ -1,0 +1,251 @@
+{
+#[derive(Clone, Debug)]
+pub enum Ast {
+    Program {
+        statements: Vec<Ast>,
+        return_name: String,
+    },
+    Statements(Vec<Ast>),
+    Assignment {
+        name: String,
+        value: Box<Ast>,
+    },
+    If {
+        condition: Box<Ast>,
+        statements: Vec<Ast>,
+    },
+    Integer(i64),
+    Identifier(String),
+    Add {
+        left: Box<Ast>,
+        operator: String,
+        right: Box<Ast>,
+    },
+}
+
+#[derive(Default)]
+struct ParserCustomData {
+    indentation: usize,
+}
+
+fn ast(value: &Value) -> Ast {
+    match value {
+        Value::Custom(value) => value
+            .downcast_ref::<Ast>()
+            .expect("AST value")
+            .clone(),
+        other => panic!("expected AST value, got {:?}", other),
+    }
+}
+
+fn ast_items(value: &Value) -> Vec<Ast> {
+    match value {
+        Value::Null => Vec::new(),
+        Value::Array(values) => values.iter().map(ast).collect(),
+        Value::Custom(_) => match ast(value) {
+            Ast::Statements(values) => values,
+            value => vec![value],
+        },
+        other => panic!("expected AST list, got {:?}", other),
+    }
+}
+
+fn identifier(value: &Value) -> String {
+    match ast(value) {
+        Ast::Identifier(value) => value,
+        other => panic!("expected identifier, got {:?}", other),
+    }
+}
+
+fn program(statements: Value, return_value: Value) -> Value {
+    Value::custom(Ast::Program {
+        statements: ast_items(&statements),
+        return_name: identifier(&return_value),
+    })
+}
+
+fn statements(value: Value) -> Value {
+    Value::custom(Ast::Statements(ast_items(&value)))
+}
+
+fn assignment(name: Value, value: Value) -> Value {
+    Value::custom(Ast::Assignment {
+        name: identifier(&name),
+        value: Box::new(ast(&value)),
+    })
+}
+
+fn if_statement(condition: Value, body: Value) -> Value {
+    Value::custom(Ast::If {
+        condition: Box::new(ast(&condition)),
+        statements: ast_items(&body),
+    })
+}
+
+fn additive(first: Value, rest: Value) -> Value {
+    let mut result = ast(&first);
+    if let Value::Array(items) = rest {
+        for item in items {
+            let pair = item.as_array().expect("additive pair");
+            result = Ast::Add {
+                left: Box::new(result),
+                operator: pair[0].as_str().expect("operator").to_string(),
+                right: Box::new(ast(&pair[1])),
+            };
+        }
+    }
+    Value::custom(result)
+}
+
+fn set_indentation(current: &Current, indentation: usize) {
+    current
+        .data
+        .borrow_mut()
+        .downcast_mut::<ParserCustomData>()
+        .expect("indentation data")
+        .indentation = indentation;
+}
+
+fn change_indentation(current: &Current, amount: isize) {
+    let mut data = current.data.borrow_mut();
+    let data = data
+        .downcast_mut::<ParserCustomData>()
+        .expect("indentation data");
+    data.indentation = data.indentation.saturating_add_signed(amount);
+}
+
+fn indentation(current: &Current) -> usize {
+    let data = current.data.borrow();
+    data.downcast_ref::<ParserCustomData>()
+        .expect("indentation data")
+        .indentation
+}
+
+pub fn parse_program(input: &str) -> Result<Value, ParseError> {
+    let options = ParserOptions {
+        custom_data: Some(Box::new(ParserCustomData::default())),
+        ..ParserOptions::default()
+    };
+    PigeonParser::parse_with_options(input, options)
+}
+
+fn eval_expression(value: &Ast, variables: &HashMap<String, i64>) -> Result<i64, String> {
+    match value {
+        Ast::Integer(value) => Ok(*value),
+        Ast::Identifier(name) => variables
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("identifier {name} is not defined")),
+        Ast::Add { left, operator, right } => {
+            let left = eval_expression(left, variables)?;
+            let right = eval_expression(right, variables)?;
+            match operator.as_str() {
+                "+" => Ok(left + right),
+                "-" => Ok(left - right),
+                _ => Err(format!("unknown operator {operator}")),
+            }
+        }
+        other => Err(format!("expected expression, got {other:?}")),
+    }
+}
+
+fn execute_statements(statements: &[Ast], variables: &mut HashMap<String, i64>) -> Result<(), String> {
+    for statement in statements {
+        match statement {
+            Ast::Assignment { name, value } => {
+                let value = eval_expression(value, variables)?;
+                variables.insert(name.clone(), value);
+            }
+            Ast::If { condition, statements } => {
+                if eval_expression(condition, variables)? != 0 {
+                    execute_statements(statements, variables)?;
+                }
+            }
+            other => return Err(format!("expected statement, got {other:?}")),
+        }
+    }
+    Ok(())
+}
+
+pub fn execute(value: &Value) -> Result<i64, String> {
+    let Ast::Program { statements, return_name } = ast(value) else {
+        return Err("expected program".to_string());
+    };
+    let mut variables = HashMap::new();
+    execute_statements(&statements, &mut variables)?;
+    variables
+        .get(&return_name)
+        .copied()
+        .ok_or_else(|| format!("identifier {return_name} is not defined"))
+}
+}
+
+Input <- &{
+    set_indentation(&c, 0);
+    return true;
+} statements:Statements return_value:ReturnOp EOF {
+    return program(statements, return_value);
+}
+
+Statements <- values:Line+ { return statements(values); }
+
+Line <- INDENTATION statement:Statement { return statement; }
+
+ReturnOp <- "return" _ value:Identifier EOL { return value; }
+
+Statement <- assignment:Assignment EOL { return assignment; }
+    / "if" _ condition:LogicalExpression _? ":" EOL INDENT body:Statements DEDENT {
+        return if_statement(condition, body);
+    }
+
+Assignment <- name:Identifier _? "=" _? value:AdditiveExpression {
+    return assignment(name, value);
+}
+
+LogicalExpression <- value:PrimaryExpression { return value; }
+
+AdditiveExpression <- first:PrimaryExpression rest:( _ operator:AddOp _ right:PrimaryExpression {
+    return Value::Array(vec![operator, right]);
+})* {
+    return additive(first, rest);
+}
+
+PrimaryExpression <- value:(Integer / Identifier) { return value; }
+
+Integer <- [0-9]+ {
+    match c.text.parse::<i64>() {
+        Ok(value) => return Value::custom(Ast::Integer(value)),
+        Err(error) => {
+            p.add_err(error);
+            return Value::Null;
+        }
+    }
+}
+
+Identifier <- [a-zA-Z] [a-zA-Z0-9]* {
+    return Value::custom(Ast::Identifier(c.text.clone()));
+}
+
+AddOp <- ('+' / '-') { return Value::String(c.text.clone()); }
+
+_ <- [ \t]+
+
+EOL <- _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
+
+Comment <- "//" [^\r\n]*
+
+EOF <- !.
+
+INDENTATION <- spaces:<(' ')*> &{
+    return spaces.as_str().map(str::len).unwrap_or(0) == indentation(&c);
+}
+
+INDENT <- {
+    change_indentation(&c, 4);
+    return Value::Null;
+}
+
+DEDENT <- {
+    change_indentation(&c, -4);
+    return Value::Null;
+}
