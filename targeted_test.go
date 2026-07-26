@@ -138,15 +138,13 @@ func TestParseAnyMatcher(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
 		var match bool
 		if tc.out != nil {
-			want = tc.out
 			match = true
 		}
 		got, ok := p.parseAnyMatcher(&anyMatcher{})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%q: want %v, got %v", tc.in, tc.out, got)
+		if got != nil {
+			t.Errorf("%q: terminal value must be nil, got %v", tc.in, got)
 		}
 		if ok != match {
 			t.Errorf("%q: want match? %t, got %t", tc.in, match, ok)
@@ -193,17 +191,15 @@ func TestParseLitMatcher(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
 		var match bool
 		if tc.out != nil {
 			match = true
-			want = tc.out
 		}
 		lbl := fmt.Sprintf("%q (%t): %q", tc.lit, tc.ic, tc.in)
 
 		got, ok := p.parseLitMatcher(&litMatcher{val: tc.lit, ignoreCase: tc.ic})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %v, got %v", lbl, tc.out, got)
+		if got != nil {
+			t.Errorf("%s: terminal value must be nil, got %v", lbl, got)
 		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
@@ -338,10 +334,8 @@ func TestParseCharClassMatcher(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
 		var match bool
 		if tc.out != nil {
-			want = tc.out
 			match = true
 		}
 		lbl := fmt.Sprintf("%q (%t-%t): %q", tc.val, tc.ic, tc.iv, tc.in)
@@ -359,8 +353,8 @@ func TestParseCharClassMatcher(t *testing.T) {
 			ignoreCase: tc.ic,
 			inverted:   tc.iv,
 		})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %v, got %v", lbl, tc.out, got)
+		if got != nil {
+			t.Errorf("%s: terminal value must be nil, got %v", lbl, got)
 		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
@@ -391,15 +385,11 @@ func TestParseZeroOrOneExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		var want any
-		if tc.out != nil {
-			want = tc.out
-		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
 		got, ok := p.parseZeroOrOneExpr(&zeroOrOneExpr{expr: &litMatcher{val: tc.lit}})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%q: want %v, got %v", lbl, tc.out, got)
+		if got != nil {
+			t.Errorf("%s: optional terminal value must be nil, got %v", lbl, got)
 		}
 		// zero or one always matches
 		if !ok {
@@ -442,18 +432,11 @@ func TestParseZeroOrMoreExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		want := make([]any, len(tc.out))
-		for i, v := range tc.out {
-			want[i] = []byte(v)
-		}
-		if tc.out == nil {
-			want = nil
-		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
 		got, ok := p.parseZeroOrMoreExpr(&zeroOrMoreExpr{expr: &litMatcher{val: tc.lit}})
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: want %#v, got %#v", lbl, want, got)
+		if got != nil {
+			t.Errorf("%s: repetition of terminal values must return nil, got %#v", lbl, got)
 		}
 		// zero or more always matches
 		if !ok {
@@ -466,6 +449,29 @@ func TestParseZeroOrMoreExpr(t *testing.T) {
 		if p.pt.offset != wantOffset {
 			t.Errorf("%s: want offset %d, got %d", lbl, wantOffset, p.pt.offset)
 		}
+	}
+}
+
+func TestParseZeroOrMoreExprCollectsActionValues(t *testing.T) {
+	p := newParser("", []byte("aab"))
+	p.read()
+
+	action := &actionExpr{
+		expr: &litMatcher{val: "a"},
+		run: func(p *parser) any {
+			return string(p.cur.text)
+		},
+	}
+	got, ok := p.parseZeroOrMoreExpr(&zeroOrMoreExpr{expr: action})
+	if !ok {
+		t.Fatal("zero-or-more action must match")
+	}
+	want := []any{"a", "a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("want explicitly returned values %#v, got %#v", want, got)
+	}
+	if p.pt.offset != 2 {
+		t.Fatalf("want offset 2, got %d", p.pt.offset)
 	}
 }
 
@@ -500,22 +506,16 @@ func TestParseOneOrMoreExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		// var want any
 		var match bool
 		if tc.out != nil {
-			vals := make([]any, len(tc.out))
-			for i, v := range tc.out {
-				vals[i] = []byte(v)
-			}
-			// want = vals
 			match = true
 		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
-		_, ok := p.parseOneOrMoreExpr(&oneOrMoreExpr{expr: &litMatcher{val: tc.lit}})
-		// if !reflect.DeepEqual(got, want) {
-		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		// }
+		got, ok := p.parseOneOrMoreExpr(&oneOrMoreExpr{expr: &litMatcher{val: tc.lit}})
+		if got != nil {
+			t.Errorf("%s: repetition of terminal values must return nil, got %#v", lbl, got)
+		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -526,6 +526,29 @@ func TestParseOneOrMoreExpr(t *testing.T) {
 		if p.pt.offset != wantOffset {
 			t.Errorf("%s: want offset %d, got %d", lbl, wantOffset, p.pt.offset)
 		}
+	}
+}
+
+func TestParseOneOrMoreExprCollectsActionValues(t *testing.T) {
+	p := newParser("", []byte("aab"))
+	p.read()
+
+	action := &actionExpr{
+		expr: &litMatcher{val: "a"},
+		run: func(p *parser) any {
+			return string(p.cur.text)
+		},
+	}
+	got, ok := p.parseOneOrMoreExpr(&oneOrMoreExpr{expr: action})
+	if !ok {
+		t.Fatal("one-or-more action must match")
+	}
+	want := []any{"a", "a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("want explicitly returned values %#v, got %#v", want, got)
+	}
+	if p.pt.offset != 2 {
+		t.Fatalf("want offset 2, got %d", p.pt.offset)
 	}
 }
 
@@ -550,19 +573,10 @@ func TestParseSeqExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		// var want any
 		var match bool
 		if tc.out != nil {
-			// var vals []any
-			// for _, v := range tc.out {
-			// 	vals = append(vals, []byte(v))
-			// }
-			// want = vals
 			match = true
 		}
-		// if tc.lits == nil {
-		// 	want = make([]any, 0) // empty seq (impossible case via the parser) always matches
-		// }
 		lbl := fmt.Sprintf("%v: %q", tc.lits, tc.in)
 
 		lits := make([]any, len(tc.lits))
@@ -570,10 +584,10 @@ func TestParseSeqExpr(t *testing.T) {
 			lits[i] = &litMatcher{val: l}
 		}
 
-		_, ok := p.parseSeqExpr(&seqExpr{exprs: lits})
-		// if !reflect.DeepEqual(got, want) {
-		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		// }
+		got, ok := p.parseSeqExpr(&seqExpr{exprs: lits})
+		if got != nil {
+			t.Errorf("%s: sequence value must be nil, got %#v", lbl, got)
+		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -588,21 +602,23 @@ func TestParseSeqExpr(t *testing.T) {
 }
 
 func TestParseRuleRefExpr(t *testing.T) {
-	p := newParser("", []byte(""))
-
-	func() {
-		defer func() {
-			if e := recover(); e != nil {
-				return
+	for _, name := range []string{"", "a"} {
+		t.Run(name, func(t *testing.T) {
+			p := newParser("", nil)
+			got, ok := p.parseRuleRefExpr(&ruleRefExpr{name: name})
+			if ok || got != nil {
+				t.Fatalf("undefined rule %q: want nil, false; got %#v, %t", name, got, ok)
 			}
-			t.Fatal("want panic, got none")
-		}()
-		p.parseRuleRefExpr(&ruleRefExpr{})
-	}()
 
-	p.parseRuleRefExpr(&ruleRefExpr{name: "a"})
-	if p.errs.err() == nil {
-		t.Fatal("want error, got none")
+			errs := *p.errs
+			if len(errs) != 1 {
+				t.Fatalf("undefined rule %q: want one error, got %d", name, len(errs))
+			}
+			want := "undefined rule: " + name
+			if got := errs[0].(*parserError).Inner.Error(); got != want {
+				t.Fatalf("undefined rule %q: want error %q, got %q", name, want, got)
+			}
+		})
 	}
 }
 
@@ -809,34 +825,76 @@ func TestParseLabeledExpr(t *testing.T) {
 		p.read()
 		p.pushV()
 
-		// var want any
 		var match bool
 		if tc.out != nil {
 			match = true
-			// want = tc.out
 		}
 		lbl := fmt.Sprintf("%q: %q", tc.lit, tc.in)
 
 		got, ok := p.parseLabeledExpr(&labeledExpr{label: "l", expr: &litMatcher{val: tc.lit}})
-		// if !reflect.DeepEqual(got, want) {
-		// 	t.Errorf("%s: want %v, got %v", lbl, tc.out, got)
-		// }
+		if got != nil {
+			t.Errorf("%s: labeled terminal value must be nil, got %v", lbl, got)
+		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
+		}
+		if len(p.vstack) != 1 {
+			t.Errorf("%s: want %d var sets on the stack, got %d", lbl, 1, len(p.vstack))
 		} else {
-			// must be 1 var set on the stack
-			if len(p.vstack) != 1 {
-				t.Errorf("%s: want %d var sets on the stack, got %d", lbl, 1, len(p.vstack))
-			} else {
-				vs := p.vstack[0]
-				if !reflect.DeepEqual(vs["l"], got) {
-					t.Errorf("%s: want %v on the stack for this label, got %v", lbl, got, vs["l"])
-				}
+			labelValue, exists := p.vstack[0]["l"]
+			if exists != match {
+				t.Errorf("%s: want label to exist? %t, got %t", lbl, match, exists)
+			}
+			if labelValue != nil {
+				t.Errorf("%s: terminal label value must be nil, got %v", lbl, labelValue)
 			}
 		}
 
 		if p.pt.offset != len(tc.out) {
 			t.Errorf("%s: want offset %d, got %d", lbl, len(tc.out), p.pt.offset)
+		}
+	}
+}
+
+func TestParseLabeledExprTextCapture(t *testing.T) {
+	cases := []struct {
+		in      string
+		lit     string
+		capture string
+		match   bool
+	}{
+		{"", "", "", true},
+		{"", "a", "", false},
+		{"a", "a", "a", true},
+		{"ab", "a", "a", true},
+		{"ab", "ab", "ab", true},
+	}
+
+	for _, tc := range cases {
+		p := newParser("", []byte(tc.in))
+		p.read()
+		p.pushV()
+
+		got, ok := p.parseLabeledExpr(&labeledExpr{
+			label:       "l",
+			expr:        &litMatcher{val: tc.lit},
+			textCapture: true,
+		})
+		if got != nil {
+			t.Errorf("%q: text capture must not change the expression value, got %v", tc.in, got)
+		}
+		if ok != tc.match {
+			t.Errorf("%q: want match? %t, got %t", tc.in, tc.match, ok)
+		}
+		captured, exists := p.vstack[0]["l"]
+		if exists != tc.match {
+			t.Errorf("%q: want capture to exist? %t, got %t", tc.in, tc.match, exists)
+		}
+		if tc.match && captured != tc.capture {
+			t.Errorf("%q: want capture %q, got %#v", tc.in, tc.capture, captured)
+		}
+		if p.pt.offset != len(tc.capture) {
+			t.Errorf("%q: want offset %d, got %d", tc.in, len(tc.capture), p.pt.offset)
 		}
 	}
 }
@@ -874,10 +932,8 @@ func TestParseChoiceExpr(t *testing.T) {
 		// advance to the first rune
 		p.read()
 
-		// var want any
 		var match bool
 		if tc.out != nil {
-			// want = tc.out
 			match = true
 		}
 		lbl := fmt.Sprintf("%v: %q", tc.lits, tc.in)
@@ -887,11 +943,10 @@ func TestParseChoiceExpr(t *testing.T) {
 			lits[i] = &litMatcher{val: l}
 		}
 
-		_, ok := p.parseChoiceExpr(&choiceExpr{alternatives: lits})
-		// always return nil, value equal is meaningless
-		// if !reflect.DeepEqual(got, want) {
-		// 	t.Errorf("%s: want %#v, got %#v", lbl, want, got)
-		// }
+		got, ok := p.parseChoiceExpr(&choiceExpr{alternatives: lits})
+		if got != nil {
+			t.Errorf("%s: choice of terminal values must return nil, got %#v", lbl, got)
+		}
 		if ok != match {
 			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
 		}
@@ -903,19 +958,22 @@ func TestParseChoiceExpr(t *testing.T) {
 
 func TestParseActionExpr(t *testing.T) {
 	cases := []struct {
-		in  string
-		lit string
-		v   any
-		err error
+		in    string
+		lit   string
+		value any
+		match bool
+		err   error
 	}{
-		{"", "", 1, nil}, // empty string always matches
-		{"", "", 1, io.EOF},
-		{"", "a", nil, nil},
-		{"a", "a", 1, nil},
-		{"a", "a", 1, io.EOF},
-		{"ab", "a", 1, nil},
-		{"ab", "a", 1, io.EOF},
-		{"ba", "a", nil, nil},
+		{"", "", 1, true, nil}, // empty string always matches
+		{"", "", nil, true, nil},
+		{"", "", 1, true, io.EOF},
+		{"", "a", 1, false, nil},
+		{"a", "a", 1, true, nil},
+		{"a", "a", nil, true, nil},
+		{"a", "a", 1, true, io.EOF},
+		{"ab", "a", 1, true, nil},
+		{"ab", "a", 1, true, io.EOF},
+		{"ba", "a", 1, false, nil},
 	}
 
 	for _, tc := range cases {
@@ -925,7 +983,7 @@ func TestParseActionExpr(t *testing.T) {
 			if tc.err != nil {
 				p.addErr(tc.err)
 			}
-			return tc.v
+			return tc.value
 		}
 		p := newParser("", []byte(tc.in))
 
@@ -934,22 +992,24 @@ func TestParseActionExpr(t *testing.T) {
 
 		lbl := fmt.Sprintf("%q: %q", tc.in, tc.lit)
 
-		match := tc.v != nil
-
 		got, ok := p.parseActionExpr(&actionExpr{run: fn, expr: &litMatcher{val: tc.lit}})
-		if ok != match {
-			t.Errorf("%s: want match? %t, got %t", lbl, match, ok)
+		if ok != tc.match {
+			t.Errorf("%s: want match? %t, got %t", lbl, tc.match, ok)
 		}
-		if !reflect.DeepEqual(got, tc.v) {
-			t.Errorf("%s: want %#v, got %#v", lbl, tc.v, got)
+		want := tc.value
+		if !tc.match {
+			want = nil
 		}
-		if match != called {
-			t.Errorf("%s: want action code to be called? %t, got %t", lbl, match, called)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: want %#v, got %#v", lbl, want, got)
+		}
+		if tc.match != called {
+			t.Errorf("%s: want action code to be called? %t, got %t", lbl, tc.match, called)
 		}
 
 		el := *p.errs
 		wantn := 0
-		if tc.err != nil {
+		if tc.match && tc.err != nil {
 			wantn = 1
 		}
 		if len(el) != wantn {
@@ -962,7 +1022,7 @@ func TestParseActionExpr(t *testing.T) {
 		}
 
 		wantOffset := 0
-		if match {
+		if tc.match {
 			wantOffset = len(tc.lit)
 		}
 		if p.pt.offset != wantOffset {
