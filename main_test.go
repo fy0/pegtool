@@ -35,6 +35,10 @@ func TestMain(t *testing.T) {
 		{args: []string{"-x"}, code: 3},             // stdin: no match found
 		{args: []string{"-t", "hx", "-x", grammarFile}},
 		{args: []string{"-target", "hx", "-x", grammarFile}},
+		{args: []string{"-t", "ts", "-x", grammarFile}},
+		{args: []string{"-t", "cs", "-x", grammarFile}},
+		{args: []string{"-t", "rust", "-x", grammarFile}},
+		{args: []string{"-t", "unknown", "-x", grammarFile}, code: 1},
 	}
 
 	for _, tc := range cases {
@@ -44,6 +48,28 @@ func TestMain(t *testing.T) {
 		if got != tc.code {
 			t.Errorf("%q: want code %d, got %d", tc.args, tc.code, got)
 		}
+	}
+}
+
+func TestParserBuilderForTarget(t *testing.T) {
+	for _, target := range []string{
+		"go", "hx", "haxe", "ts", "typescript", "cs", "csharp", "c#", "rust",
+	} {
+		builder, formatGo, err := parserBuilderForTarget(target)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", target, err)
+			continue
+		}
+		if builder == nil {
+			t.Errorf("%q: nil builder", target)
+		}
+		if formatGo != (target == "go") {
+			t.Errorf("%q: formatGo = %t", target, formatGo)
+		}
+	}
+
+	if _, _, err := parserBuilderForTarget("invalid"); err == nil {
+		t.Fatal("expected invalid target error")
 	}
 }
 

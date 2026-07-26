@@ -1,0 +1,342 @@
+{
+{{ if eq .Target "ts" }}
+function valueString(value: any): string {
+  return value == null ? "" : String(value);
+}
+
+function flattenStrings(value: any): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap(flattenStrings);
+  return [String(value)];
+}
+
+function gatherParams(first: any, rest: any): string[] {
+  return [valueString(first), ...flattenStrings(rest)];
+}
+{{ else if eq .Target "cs" }}
+private static string ValueString(object? value)
+{
+    return value?.ToString() ?? string.Empty;
+}
+
+private static List<string> FlattenStrings(object? value)
+{
+    var result = new List<string>();
+    if (value is null) return result;
+    if (value is string text)
+    {
+        result.Add(text);
+        return result;
+    }
+    if (value is System.Collections.IEnumerable values)
+    {
+        foreach (var item in values) result.AddRange(FlattenStrings(item));
+        return result;
+    }
+    result.Add(value.ToString() ?? string.Empty);
+    return result;
+}
+
+private static object GatherParams(object? first, object? rest)
+{
+    var result = new List<object?> { ValueString(first) };
+    result.AddRange(FlattenStrings(rest));
+    return result;
+}
+{{ else if eq .Target "rust" }}
+fn valueString(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(value) => value.clone(),
+        Value::Int(value) => value.to_string(),
+        Value::Float(value) => value.to_string(),
+        Value::Bool(value) => value.to_string(),
+        other => format!("{:?}", other),
+    }
+}
+
+fn flattenStrings(value: &Value) -> Vec<String> {
+    match value {
+        Value::Null => Vec::new(),
+        Value::Array(values) => values.iter().flat_map(flattenStrings).collect(),
+        other => vec![valueString(other)],
+    }
+}
+
+fn gatherParams(first: &Value, rest: &Value) -> Value {
+    let mut result = vec![Value::String(valueString(first))];
+    result.extend(flattenStrings(rest).into_iter().map(Value::String));
+    Value::Array(result)
+}
+{{ end }}
+}
+
+// ENTRY POINT
+input <- sp x:nodes !. { return x; }
+
+nodes <- nodes:(node*) { return nodes; }
+
+_nodeCond <- '[' cond:CodeExpr2? ']' { return cond; }
+_nodeNext <- '[' name:identifier ']' { return name; }
+
+node <- nodeType1 / nodeType2
+
+nodeType1 <- ':' spNoCR name:identifier? spNoCR (cond:_nodeCond spNoCR next:_nodeNext?) spNoCR cr2 lines:nodeLines {
+{{ if eq .Target "ts" }}
+  return [valueString(name), valueString(cond), valueString(next), flattenStrings(lines).join("")].join("\u001f");
+{{ else if eq .Target "cs" }}
+  return string.Join("\u001f", new[] { ValueString(name), ValueString(cond), ValueString(next), string.Join("", FlattenStrings(lines)) });
+{{ else if eq .Target "rust" }}
+  return Value::String(vec![valueString(&name), valueString(&cond), valueString(&next), flattenStrings(&lines).join("")].join("\u{1f}"));
+{{ end }}
+}
+
+nodeType2 <- ':' spNoCR name:identifier? spNoCR cr2 lines:nodeLines {
+{{ if eq .Target "ts" }}
+  return [valueString(name), "", "", flattenStrings(lines).join("")].join("\u001f");
+{{ else if eq .Target "cs" }}
+  return string.Join("\u001f", new[] { ValueString(name), "", "", string.Join("", FlattenStrings(lines)) });
+{{ else if eq .Target "rust" }}
+  return Value::String(vec![valueString(&name), String::new(), String::new(), flattenStrings(&lines).join("")].join("\u{1f}"));
+{{ end }}
+}
+
+nodeLines <- lines:nodeLine* sp { return lines; }
+
+nodeLine <- nodeLineTypeComment / nodeLineType2 / nodeLineCommonText
+
+nodeLineTypeComment <- '@' '#' (!cr .)+ cr sp
+
+_curLine <- (!cr .)+ {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+nodeLineType1x <- '@' !'{' expr:_curLine cr2
+
+nodeLineType1 <- '@' name:identifier params:funcInvoke sp {
+{{ if eq .Target "ts" }}
+  return "@" + valueString(name) + "(" + flattenStrings(params).join(",") + ")";
+{{ else if eq .Target "cs" }}
+  return "@" + ValueString(name) + "(" + string.Join(",", FlattenStrings(@params)) + ")";
+{{ else if eq .Target "rust" }}
+  return Value::String(format!("@{}({})", valueString(&name), flattenStrings(&params).join(",")));
+{{ end }}
+}
+
+nodeLineType2 <- "@{" code:Code ("}!" / "}") spNoCR cr2 {
+{{ if eq .Target "ts" }}
+  return "<codeBlock>" + valueString(code);
+{{ else if eq .Target "cs" }}
+  return "<codeBlock>" + ValueString(code);
+{{ else if eq .Target "rust" }}
+  return Value::String(format!("<codeBlock>{}", valueString(&code)));
+{{ end }}
+}
+
+_nltEscape <- "\\{" {
+{{ if eq .Target "rust" }}
+  return Value::String("{".to_string());
+{{ else }}
+  return "{";
+{{ end }}
+}
+
+_nltChar <- [^\r\n{] {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+nodeLineText <- items:((_nltEscape / _nltChar)+) {
+{{ if eq .Target "ts" }}
+  return flattenStrings(items).join("");
+{{ else if eq .Target "cs" }}
+  return string.Join("", FlattenStrings(items));
+{{ else if eq .Target "rust" }}
+  return Value::String(flattenStrings(&items).join(""));
+{{ end }}
+}
+
+nodeLineExprBlock <- '{' expr:CodeExpr '}' {
+{{ if eq .Target "ts" }}
+  return "<codeInText>" + valueString(expr);
+{{ else if eq .Target "cs" }}
+  return "<codeInText>" + ValueString(expr);
+{{ else if eq .Target "rust" }}
+  return Value::String(format!("<codeInText>{}", valueString(&expr)));
+{{ end }}
+}
+
+// Lines not starting with ':' or '@' allow embedded expressions.
+nodeLineCommonText <- ![:@] items:((nodeLineText / nodeLineExprBlock)*) cr2 {
+{{ if eq .Target "ts" }}
+  const values = flattenStrings(items);
+  values.push("\n");
+  return values;
+{{ else if eq .Target "cs" }}
+  var values = FlattenStrings(items);
+  values.Add("\n");
+  return values;
+{{ else if eq .Target "rust" }}
+  let mut values: Vec<Value> = flattenStrings(&items).into_iter().map(Value::String).collect();
+  values.push(Value::String("\n".to_string()));
+  return Value::Array(values);
+{{ end }}
+}
+
+funcInvoke <- '(' sp ')' {
+{{ if eq .Target "ts" }}
+  return [];
+{{ else if eq .Target "cs" }}
+  return new List<object?>();
+{{ else if eq .Target "rust" }}
+  return Value::Array(Vec::new());
+{{ end }}
+}
+            / '(' sp first:_codeExpr rest:(funcInvokeParamExtend*) ')' {
+{{ if eq .Target "ts" }}
+  return gatherParams(first, rest);
+{{ else if eq .Target "cs" }}
+  return GatherParams(first, rest);
+{{ else if eq .Target "rust" }}
+  return gatherParams(&first, &rest);
+{{ end }}
+}
+
+funcInvokeParamExtend <- sp ',' sp e:_codeExpr { return e; }
+
+_codeExpr <- _codeExpr2 {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+_codeExpr2 <- identifier
+           / integer
+           / [0-9]* '.' [0-9]+
+           / stringType
+
+stringType <- (codeString / '`' [^`]* '`') {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+codeString <- '"' (!EscapedChar . / '\\' EscapeSequence)* '"'
+            / '\'' (!EscapedChar2 . / '\\' EscapeSequence2)* '\''
+
+EscapedChar2 <- [\x00-\x1f'\\]
+EscapeSequence2 <- SingleCharEscape2 / UnicodeEscape
+SingleCharEscape2 <- ['\\/bfnrt]
+
+String <- '"' (!EscapedChar . / '\\' EscapeSequence)* '"'
+EscapedChar <- [\x00-\x1f"\\]
+EscapeSequence <- SingleCharEscape / UnicodeEscape
+SingleCharEscape <- ["\\/bfnrt]
+UnicodeEscape <- 'u' HexDigit HexDigit HexDigit HexDigit
+DecimalDigit <- [0-9]
+NonZeroDecimalDigit <- [1-9]
+HexDigit <- [0-9a-f]i
+
+integer <- '-'? [0-9]+ {
+{{ if eq .Target "ts" }}
+  return Number.parseInt(c.text, 10);
+{{ else if eq .Target "cs" }}
+  return int.Parse(c.Text);
+{{ else if eq .Target "rust" }}
+  return Value::Int(c.text.parse::<i64>().unwrap());
+{{ end }}
+}
+
+identifier <- xidStart xidContinue* {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+xidStart <- [_\p{L}\p{Other_ID_Start}]
+xidContinue <- [\p{L}\p{Other_ID_Start}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}\p{Other_ID_Continue}]
+
+sp "whitespace" <- [ \n\t\r]*
+spNoCR <- [ \t]*
+cr <- [\r\n]
+cr2 <- '\r'? '\n'
+
+SourceChar <- .
+Comment <- MultiLineComment / SingleLineComment
+MultiLineComment <- "/*" (!"*/" SourceChar)* "*/"
+MultiLineCommentNoLineTerminator <- "/*" (!("*/" / cr) SourceChar)* "*/"
+SingleLineComment <- !("//{") "//" (!cr SourceChar)*
+
+CodeStringLiteral <- '"' (`\"` / `\\` / [^"\r\n])* '"'
+                   / '`' [^`]* '`'
+                   / '\'' (`\'` / `\\` / [^']+)* '\''
+
+Code <- ((Comment / CodeStringLiteral / ![{}] SourceChar)+ / '{' Code '}')* {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+CodeExpr <- ((CodeStringLiteral / ![{}] SourceChar)+ / '{' CodeExpr '}')* {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+CodeExpr2 <- ((CodeStringLiteral / ![[\]] SourceChar)+ / '[' CodeExpr2 ']')* {
+{{ if eq .Target "ts" }}
+  return c.text;
+{{ else if eq .Target "cs" }}
+  return c.Text;
+{{ else if eq .Target "rust" }}
+  return Value::String(c.text.clone());
+{{ end }}
+}
+
+// Compile probes for fork-specific expression nodes not reached by the story.
+predicateAnd <- &{ return true; } "a"
+
+predicateNot <- !{ return false; } "b"
+
+codeProbe <- *{
+{{ if eq .Target "ts" }}
+  return null;
+{{ else if eq .Target "cs" }}
+  return null;
+{{ else if eq .Target "rust" }}
+  return Value::Null;
+{{ end }}
+}
+
+recoveryProbe <- %{fallback} //{fallback} "x"

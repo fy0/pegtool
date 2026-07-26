@@ -15,7 +15,10 @@ import (
 
 	"github.com/fy0/pigeon/ast"
 	builderGo "github.com/fy0/pigeon/builder"
+	builderCs "github.com/fy0/pigeon/builder_cs"
 	builderHx "github.com/fy0/pigeon/builder_hx"
+	builderRust "github.com/fy0/pigeon/builder_rust"
+	builderTs "github.com/fy0/pigeon/builder_ts"
 )
 
 // exit function mockable for tests
@@ -96,6 +99,11 @@ func main() {
 		argError(1, "expected one argument, got %q", strings.Join(fs.Args(), " "))
 	}
 
+	buildParser, formatGo, err := parserBuilderForTarget(*targetFlag)
+	if err != nil {
+		argError(1, "%v", err)
+	}
+
 	// get input source
 	infile := ""
 	if fs.NArg() == 1 {
@@ -165,24 +173,12 @@ func main() {
 		grammarOnly := builderGo.GrammarOnly(*grammarOnlyFlag)
 		grammarName := builderGo.GrammarName(*grammarNameFlag)
 
-		if *targetFlag == "go" {
-			if err := builderGo.BuildParser(
-				outBuf, grammar, curNmOpt, optimizeParser,
-				runFuncPrefix, grammarOnly, grammarName,
-				nolintOpt, refExprByIndex); err != nil {
-				fmt.Fprintln(os.Stderr, "build error: ", err)
-				exit(5)
-			}
-		}
-
-		if *targetFlag == "hx" {
-			if err := builderHx.BuildParser(
-				outBuf, grammar, curNmOpt, optimizeParser,
-				runFuncPrefix, grammarOnly, grammarName,
-				nolintOpt, refExprByIndex); err != nil {
-				fmt.Fprintln(os.Stderr, "build error: ", err)
-				exit(5)
-			}
+		if err := buildParser(
+			outBuf, grammar, curNmOpt, optimizeParser,
+			runFuncPrefix, grammarOnly, grammarName,
+			nolintOpt, refExprByIndex); err != nil {
+			fmt.Fprintln(os.Stderr, "build error: ", err)
+			exit(5)
 		}
 
 		// Defaults from golang.org/x/tools/cmd/goimports
@@ -193,7 +189,7 @@ func main() {
 			Fragment:  true,
 		}
 
-		if *targetFlag == "go" {
+		if formatGo {
 			formattedBuf, err := imports.Process("filename", outBuf.Bytes(), options)
 			if err != nil {
 				if _, err := out.Write(outBuf.Bytes()); err != nil {
@@ -214,6 +210,28 @@ func main() {
 				exit(7)
 			}
 		}
+	}
+}
+
+type parserBuilder func(io.Writer, *ast.Grammar, ...builderGo.Option) error
+
+func parserBuilderForTarget(target string) (parserBuilder, bool, error) {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "go":
+		return builderGo.BuildParser, true, nil
+	case "hx", "haxe":
+		return builderHx.BuildParser, false, nil
+	case "ts", "typescript":
+		return builderTs.BuildParser, false, nil
+	case "cs", "csharp", "c#":
+		return builderCs.BuildParser, false, nil
+	case "rust":
+		return builderRust.BuildParser, false, nil
+	default:
+		return nil, false, fmt.Errorf(
+			"unknown build target %q (supported: go, hx, ts, cs, rust)",
+			target,
+		)
 	}
 }
 
@@ -264,7 +282,7 @@ the generated code is written to this file instead.
 	-run-func-prefix
 		set prefix for generated function name: "(*parser).call_onXXX". For multiple peg files
 	-t TARGET, -target TARGET
-		build target, default go
+		build target: go, hx, ts, cs, or rust. Defaults to go.
 
 See https://godoc.org/github.com/mna/pigeon for more information.
 This version is a fork: https://github.com/fy0/pigeon

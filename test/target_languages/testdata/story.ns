@@ -1,0 +1,15 @@
+:开场
+你好，{player}！
+@{ val = select(['选项A', '选项B', '选项C']) }
+
+:[val == 1][end]
+选项A
+
+:[val == 2][end]
+选项B
+
+:[val == 3][end]
+选项C
+
+:end
+结束
