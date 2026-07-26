@@ -1,11 +1,11 @@
-# pigeon - a PEG parser generator for Go
+# pigeon - a PEG parser generator
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/mna/pigeon.svg)](https://pkg.go.dev/github.com/fy0/pigeon)
 [![Test Status](https://github.com/mna/pigeon/workflows/Go%20Matrix/badge.svg)](https://github.com/fy0/pigeon/actions?query=workflow%3AGo%20Matrix)
 [![GoReportCard](https://goreportcard.com/badge/github.com/mna/pigeon)](https://goreportcard.com/report/github.com/fy0/pigeon)
 [![Software License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
-The pigeon command generates parsers based on a [parsing expression grammar (PEG)][0]. Its grammar and syntax is inspired by the [PEG.js project][1], while the implementation is loosely based on the [parsing expression grammar for C# 3.0][2] article. It parses Unicode text encoded in UTF-8.
+The pigeon command generates Go, Haxe, TypeScript, C#, and Rust parsers based on a [parsing expression grammar (PEG)][0]. Its grammar and syntax is inspired by the [PEG.js project][1], while the implementation is loosely based on the [parsing expression grammar for C# 3.0][2] article. It parses Unicode text encoded in UTF-8.
 
 ## Features for this fork
 
@@ -98,6 +98,36 @@ pigeon [options] [PEG_GRAMMAR_FILE]
 ```
 
 By default, the input grammar is read from `stdin` and the generated code is printed to `stdout`. You may save it in a file using the `-o` flag.
+
+## Language targets
+
+Use `-t` or `-target` to select a generator. Every generated parser is self-contained and uses only its language's standard library.
+
+```sh
+pigeon -t go   -o parser.go grammar.peg
+pigeon -t hx   -o Parser.hx grammar.peg
+pigeon -t ts   -o parser.ts grammar.peg
+pigeon -t cs   -o Parser.cs grammar.peg
+pigeon -t rust -o parser.rs grammar.peg
+```
+
+The long aliases `typescript`, `csharp`, `c#`, and `haxe` are also accepted. Grammar templates receive the canonical target values `go`, `haxe`, `ts`, `cs`, and `rust`, so one grammar can contain target-specific initializer and action code:
+
+```text
+{{ if eq .Target "ts" }}
+// TypeScript code
+{{ else if eq .Target "cs" }}
+// C# code
+{{ else if eq .Target "rust" }}
+// Rust code
+{{ end }}
+```
+
+The generated TypeScript module exports `parse`, `Parser`, and `ParserOptions`. The C# source exposes `PigeonParser.Parse` and `PigeonParser.ParserOptions`. Rust exposes `PigeonParser::parse`, `PigeonParser::parse_with_options`, and the cloneable `Value` enum used by action labels and return values.
+
+TypeScript and Rust initializer blocks are emitted at module scope. A C# initializer block is emitted inside the generated partial `PigeonParser` class, so it should contain nested types, fields, and helper methods rather than namespace or top-level declarations.
+
+TypeScript and C# action labels use `any` and `object?` respectively. C# labels that are language keywords are emitted as verbatim identifiers, for example the PEG label `params` is referenced as `@params` in C# action code. Rust labels use `Value`; its `String`, `Int`, `Float`, `Bool`, `Array`, `Object`, and `Custom` variants cover parser values and user-defined types.
 
 Github user [@mna][6] created the original package in April 2015, and [@breml][5] is the original package's maintainer as of May 2017.
 
@@ -195,7 +225,8 @@ The generated parser can parse simple arithmetic operations, e.g.:
 => -141
 ```
 
-More examples can be found in the `examples/` subdirectory.
+More examples, grouped by generated language, can be found in the
+[`examples/`](examples/README.md) subdirectory.
 
 See the [package documentation][3] for detailed usage.
 
