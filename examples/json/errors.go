@@ -1,5 +1,10 @@
 package json
 
+// Statistics configures choice-alternative counters for the parser.
+func Statistics(stats *Stats, choiceNoMatch string) Option {
+	return statistics(stats, choiceNoMatch)
+}
+
 // ErrorLister is the public interface to access the inner errors
 // included in a errList
 type ErrorLister interface {

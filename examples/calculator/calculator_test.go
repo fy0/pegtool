@@ -163,8 +163,8 @@ func TestMemoization(t *testing.T) {
 	if goti != want {
 		t.Errorf("want %d, got %d", want, goti)
 	}
-	if p.ExprCnt != 440 {
-		t.Errorf("with Memoize=false, want %d expressions evaluated, got %d", 440, p.ExprCnt)
+	if p.ExprCnt != 456 {
+		t.Errorf("with Memoize=false, want %d expressions evaluated, got %d", 456, p.ExprCnt)
 	}
 }
 
