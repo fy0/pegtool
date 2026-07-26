@@ -1,0 +1,813 @@
+package builder_rust
+
+const runtimeCode = `
+#[derive(Clone)]
+pub enum Value {
+    Null,
+    String(String),
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Array(Vec<Value>),
+    Object(BTreeMap<String, Value>),
+    Custom(Rc<dyn Any>),
+}
+
+impl Value {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::String(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Value::Int(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn custom<T: Any>(value: T) -> Value {
+        Value::Custom(Rc::new(value))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Null => formatter.write_str("Null"),
+            Value::String(value) => formatter.debug_tuple("String").field(value).finish(),
+            Value::Int(value) => formatter.debug_tuple("Int").field(value).finish(),
+            Value::Float(value) => formatter.debug_tuple("Float").field(value).finish(),
+            Value::Bool(value) => formatter.debug_tuple("Bool").field(value).finish(),
+            Value::Array(value) => formatter.debug_tuple("Array").field(value).finish(),
+            Value::Object(value) => formatter.debug_tuple("Object").field(value).finish(),
+            Value::Custom(_) => formatter.write_str("Custom(..)"),
+        }
+    }
+}
+
+impl From<String> for Value {
+    fn from(value: String) -> Self { Value::String(value) }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self { Value::String(value.to_string()) }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self { Value::Int(value) }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self { Value::Bool(value) }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(value: Vec<Value>) -> Self { Value::Array(value) }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Position {
+    pub line: usize,
+    pub col: usize,
+    pub offset: usize,
+}
+
+#[derive(Clone)]
+pub struct Current {
+    pub pos: Position,
+    pub text: String,
+    pub data: Rc<RefCell<Box<dyn Any>>>,
+}
+
+pub struct ParserOptions {
+    pub custom_data: Option<Box<dyn Any>>,
+    pub entrypoint: Option<String>,
+    pub filename: String,
+    pub max_expressions: u64,
+}
+
+impl Default for ParserOptions {
+    fn default() -> Self {
+        Self {
+            custom_data: None,
+            entrypoint: None,
+            filename: String::new(),
+            max_expressions: i32::MAX as u64,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub message: String,
+    pub position: Position,
+    pub expected: Vec<String>,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for ParseError {}
+
+type ActionFn = fn(&mut PigeonParser) -> Value;
+type PredicateFn = fn(&mut PigeonParser) -> bool;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ExprKind {
+    Invalid,
+    Action,
+    AndCode,
+    And,
+    AndLogical,
+    Any,
+    CharClass,
+    Choice,
+    Code,
+    Labeled,
+    Literal,
+    NotCode,
+    Not,
+    NotLogical,
+    OneOrMore,
+    Recovery,
+    RuleRef,
+    RuleIndexRef,
+    Sequence,
+    Throw,
+    ZeroOrMore,
+    ZeroOrOne,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct UnicodeRange {
+    lo: u32,
+    hi: u32,
+    stride: u32,
+}
+
+impl UnicodeRange {
+    fn new(lo: u32, hi: u32, stride: u32) -> Self {
+        Self { lo, hi, stride }
+    }
+}
+
+#[derive(Clone)]
+struct Expr {
+    kind: ExprKind,
+    inner: Option<Box<Expr>>,
+    items: Vec<Expr>,
+    action_run: Option<ActionFn>,
+    predicate_run: Option<PredicateFn>,
+    recover_expr: Option<Box<Expr>>,
+    failure_labels: Vec<String>,
+    label: String,
+    text_capture: bool,
+    name: String,
+    index: usize,
+    value: String,
+    want: String,
+    chars: Vec<u32>,
+    ranges: Vec<u32>,
+    classes: Vec<UnicodeRange>,
+    ignore_case: bool,
+    inverted: bool,
+    not_skip: bool,
+}
+
+impl Expr {
+    fn base(kind: ExprKind) -> Self {
+        Self {
+            kind,
+            inner: None,
+            items: Vec::new(),
+            action_run: None,
+            predicate_run: None,
+            recover_expr: None,
+            failure_labels: Vec::new(),
+            label: String::new(),
+            text_capture: false,
+            name: String::new(),
+            index: 0,
+            value: String::new(),
+            want: String::new(),
+            chars: Vec::new(),
+            ranges: Vec::new(),
+            classes: Vec::new(),
+            ignore_case: false,
+            inverted: false,
+            not_skip: false,
+        }
+    }
+
+    fn invalid() -> Self { Self::base(ExprKind::Invalid) }
+    fn any() -> Self { Self::base(ExprKind::Any) }
+
+    fn action(run: ActionFn, inner: Expr) -> Self {
+        let mut value = Self::base(ExprKind::Action);
+        value.action_run = Some(run);
+        value.inner = Some(Box::new(inner));
+        value
+    }
+
+    fn predicate(kind: ExprKind, run: PredicateFn) -> Self {
+        let mut value = Self::base(kind);
+        value.predicate_run = Some(run);
+        value
+    }
+
+    fn unary(kind: ExprKind, inner: Expr) -> Self {
+        let mut value = Self::base(kind);
+        value.inner = Some(Box::new(inner));
+        value
+    }
+
+    fn choice(items: Vec<Expr>) -> Self {
+        let mut value = Self::base(ExprKind::Choice);
+        value.items = items;
+        value
+    }
+
+    fn sequence(items: Vec<Expr>) -> Self {
+        let mut value = Self::base(ExprKind::Sequence);
+        value.items = items;
+        value
+    }
+
+    fn code(run: ActionFn, not_skip: bool) -> Self {
+        let mut value = Self::base(ExprKind::Code);
+        value.action_run = Some(run);
+        value.not_skip = not_skip;
+        value
+    }
+
+    fn labeled(label: &str, text_capture: bool, inner: Expr) -> Self {
+        let mut value = Self::base(ExprKind::Labeled);
+        value.label = label.to_string();
+        value.text_capture = text_capture;
+        value.inner = Some(Box::new(inner));
+        value
+    }
+
+    fn literal(value_text: &str, want: &str, ignore_case: bool) -> Self {
+        let mut value = Self::base(ExprKind::Literal);
+        value.value = value_text.to_string();
+        value.want = want.to_string();
+        value.ignore_case = ignore_case;
+        value
+    }
+
+    fn char_class(
+        value_text: &str,
+        chars: Vec<u32>,
+        ranges: Vec<u32>,
+        classes: Vec<UnicodeRange>,
+        ignore_case: bool,
+        inverted: bool,
+    ) -> Self {
+        let mut value = Self::base(ExprKind::CharClass);
+        value.value = value_text.to_string();
+        value.chars = chars;
+        value.ranges = ranges;
+        value.classes = classes;
+        value.ignore_case = ignore_case;
+        value.inverted = inverted;
+        value
+    }
+
+    fn rule_ref(name: &str) -> Self {
+        let mut value = Self::base(ExprKind::RuleRef);
+        value.name = name.to_string();
+        value
+    }
+
+    fn rule_index_ref(index: usize) -> Self {
+        let mut value = Self::base(ExprKind::RuleIndexRef);
+        value.index = index;
+        value
+    }
+
+    fn recovery(inner: Expr, recover_expr: Expr, failure_labels: Vec<String>) -> Self {
+        let mut value = Self::base(ExprKind::Recovery);
+        value.inner = Some(Box::new(inner));
+        value.recover_expr = Some(Box::new(recover_expr));
+        value.failure_labels = failure_labels;
+        value
+    }
+
+    fn throw(label: &str) -> Self {
+        let mut value = Self::base(ExprKind::Throw);
+        value.label = label.to_string();
+        value
+    }
+}
+
+#[derive(Clone)]
+struct Rule {
+    name: String,
+    display_name: Option<String>,
+    var_exists: bool,
+    expr: Expr,
+}
+
+impl Rule {
+    fn new(name: &str, display_name: Option<&str>, var_exists: bool, expr: Expr) -> Self {
+        Self {
+            name: name.to_string(),
+            display_name: display_name.map(str::to_string),
+            var_exists,
+            expr,
+        }
+    }
+}
+
+struct Grammar {
+    rules: Vec<Rule>,
+}
+
+#[derive(Clone, Copy)]
+struct Savepoint {
+    line: usize,
+    col: usize,
+    offset: usize,
+    index: usize,
+}
+
+struct Match {
+    value: Value,
+    ok: bool,
+}
+
+impl Match {
+    fn new(value: Value, ok: bool) -> Self { Self { value, ok } }
+}
+
+pub struct PigeonParser {
+    filename: String,
+    input: String,
+    entrypoint: String,
+    max_expressions: u64,
+    expression_count: u64,
+    pt: Savepoint,
+    pub cur: Current,
+    rules: HashMap<String, usize>,
+    rules_array: Vec<Rule>,
+    rule_stack: Vec<String>,
+    errors: Vec<String>,
+    recovery_stack: Vec<HashMap<String, Expr>>,
+    skip_depth: usize,
+    invert_failures: bool,
+    max_fail_pos: Savepoint,
+    max_fail_expected: Vec<String>,
+    vstack: Vec<HashMap<String, Value>>,
+}
+
+impl PigeonParser {
+    pub fn parse(input: &str) -> Result<Value, ParseError> {
+        Self::parse_with_options(input, ParserOptions::default())
+    }
+
+    pub fn parse_with_options(input: &str, mut options: ParserOptions) -> Result<Value, ParseError> {
+        let grammar = Self::{{ .GrammarVarName }}();
+        let custom_data = options.custom_data.take().unwrap_or_else(|| Box::new(()));
+        let start = Savepoint { line: 1, col: 1, offset: 0, index: 0 };
+        let mut parser = Self {
+            filename: options.filename,
+            input: input.to_string(),
+            entrypoint: options.entrypoint.unwrap_or_else(|| "{{ .Entrypoint }}".to_string()),
+            max_expressions: if options.max_expressions == 0 { i32::MAX as u64 } else { options.max_expressions },
+            expression_count: 0,
+            pt: start,
+            cur: Current {
+                pos: Position { line: 1, col: 1, offset: 0 },
+                text: String::new(),
+                data: Rc::new(RefCell::new(custom_data)),
+            },
+            rules: HashMap::new(),
+            rules_array: Vec::new(),
+            rule_stack: Vec::new(),
+            errors: Vec::new(),
+            recovery_stack: Vec::new(),
+            skip_depth: 0,
+            invert_failures: false,
+            max_fail_pos: start,
+            max_fail_expected: Vec::new(),
+            vstack: Vec::new(),
+        };
+        parser.parse_grammar(grammar)
+    }
+
+    pub fn add_err<E: fmt::Display>(&mut self, error: E) {
+        self.errors.push(error.to_string());
+    }
+
+    fn parse_grammar(&mut self, grammar: Grammar) -> Result<Value, ParseError> {
+        if grammar.rules.is_empty() {
+            return Err(self.error_at("grammar has no rule", self.pt, Vec::new()));
+        }
+        self.rules_array = grammar.rules;
+        for (index, rule) in self.rules_array.iter().enumerate() {
+            self.rules.insert(rule.name.clone(), index);
+        }
+        let start_index = match self.rules.get(&self.entrypoint) {
+            Some(index) => *index,
+            None => return Err(self.error_at("invalid entrypoint", self.pt, Vec::new())),
+        };
+        let start_rule = self.rules_array[start_index].clone();
+        let result = self.parse_rule(&start_rule);
+
+        if !result.ok && self.errors.is_empty() {
+            self.max_fail_expected.sort();
+            self.max_fail_expected.dedup();
+            if let Some(index) = self.max_fail_expected.iter().position(|value| value == "!.") {
+                self.max_fail_expected.remove(index);
+                self.max_fail_expected.push("EOF".to_string());
+            }
+            let expected = self.max_fail_expected.clone();
+            let prefix = if self.filename.is_empty() {
+                String::new()
+            } else {
+                format!("{}:", self.filename)
+            };
+            self.errors.push(format!(
+                "{}{}:{}: no match found, expected: {}",
+                prefix,
+                self.max_fail_pos.line,
+                self.max_fail_pos.col,
+                expected.join(", ")
+            ));
+            let message = self.errors.join("\n");
+            return Err(self.error_at(&message, self.max_fail_pos, expected));
+        }
+        if !self.errors.is_empty() {
+            let message = self.errors.join("\n");
+            return Err(self.error_at(&message, self.pt, Vec::new()));
+        }
+        Ok(result.value)
+    }
+
+    fn error_at(&self, message: &str, point: Savepoint, expected: Vec<String>) -> ParseError {
+        ParseError {
+            message: message.to_string(),
+            position: Position { line: point.line, col: point.col, offset: point.offset },
+            expected,
+        }
+    }
+
+    fn current_char(&self) -> Option<char> {
+        self.input[self.pt.index..].chars().next()
+    }
+
+    fn advance(&mut self) {
+        let current = match self.current_char() {
+            Some(value) => value,
+            None => return,
+        };
+        let width = current.len_utf8();
+        self.pt.index += width;
+        self.pt.offset += width;
+        if current == '\n' {
+            self.pt.line += 1;
+            self.pt.col = 1;
+        } else {
+            self.pt.col += 1;
+        }
+    }
+
+    fn restore(&mut self, point: Savepoint) {
+        self.pt = point;
+    }
+
+    fn slice_from(&self, point: Savepoint) -> String {
+        self.input[point.index..self.pt.index].to_string()
+    }
+
+    fn skipping(&self) -> bool {
+        self.skip_depth > 0
+    }
+
+    fn fail_at(&mut self, matched: bool, point: Savepoint, want: &str) {
+        if matched != self.invert_failures || point.offset < self.max_fail_pos.offset {
+            return;
+        }
+        if point.offset > self.max_fail_pos.offset {
+            self.max_fail_pos = point;
+            self.max_fail_expected.clear();
+        }
+        self.max_fail_expected.push(if self.invert_failures {
+            format!("!{}", want)
+        } else {
+            want.to_string()
+        });
+    }
+
+    fn parse_rule(&mut self, rule: &Rule) -> Match {
+        self.rule_stack.push(rule.name.clone());
+        let has_variables = rule.var_exists && !self.skipping();
+        if has_variables {
+            self.vstack.push(HashMap::new());
+        }
+        let result = self.parse_expr(&rule.expr);
+        if has_variables {
+            self.vstack.pop();
+        }
+        self.rule_stack.pop();
+        result
+    }
+
+    fn parse_expr(&mut self, expr: &Expr) -> Match {
+        self.expression_count += 1;
+        if self.expression_count > self.max_expressions {
+            self.add_err("max number of expressions parsed");
+            return Match::new(Value::Null, false);
+        }
+        match expr.kind {
+            ExprKind::Action => self.parse_action(expr),
+            ExprKind::AndCode => Match::new(Value::Null, expr.predicate_run.unwrap()(self)),
+            ExprKind::And => self.parse_and(expr, false),
+            ExprKind::AndLogical => self.parse_and(expr, true),
+            ExprKind::Any => self.parse_any(),
+            ExprKind::CharClass => self.parse_char_class(expr),
+            ExprKind::Choice => self.parse_choice(expr),
+            ExprKind::Code => self.parse_code(expr),
+            ExprKind::Labeled => self.parse_labeled(expr),
+            ExprKind::Literal => self.parse_literal(expr),
+            ExprKind::NotCode => Match::new(Value::Null, !expr.predicate_run.unwrap()(self)),
+            ExprKind::Not => self.parse_not(expr, false),
+            ExprKind::NotLogical => self.parse_not(expr, true),
+            ExprKind::OneOrMore => self.parse_one_or_more(expr),
+            ExprKind::Recovery => self.parse_recovery(expr),
+            ExprKind::RuleRef => self.parse_rule_ref(expr),
+            ExprKind::RuleIndexRef => self.parse_rule_index_ref(expr),
+            ExprKind::Sequence => self.parse_sequence(expr),
+            ExprKind::Throw => self.parse_throw(expr),
+            ExprKind::ZeroOrMore => self.parse_zero_or_more(expr),
+            ExprKind::ZeroOrOne => self.parse_zero_or_one(expr),
+            ExprKind::Invalid => {
+                self.add_err("invalid expression");
+                Match::new(Value::Null, false)
+            }
+        }
+    }
+
+    fn parse_action(&mut self, expr: &Expr) -> Match {
+        if self.skipping() {
+            let result = self.parse_expr(expr.inner.as_ref().unwrap());
+            return Match::new(Value::Null, result.ok);
+        }
+        let start = self.pt;
+        let mut result = self.parse_expr(expr.inner.as_ref().unwrap());
+        if result.ok {
+            self.cur.pos = Position { line: start.line, col: start.col, offset: start.offset };
+            self.cur.text = self.slice_from(start);
+            result.value = expr.action_run.unwrap()(self);
+        }
+        result
+    }
+
+    fn parse_and(&mut self, expr: &Expr, logical: bool) -> Match {
+        let start = self.pt;
+        self.skip_depth += 1;
+        let result = self.parse_expr(expr.inner.as_ref().unwrap());
+        self.skip_depth -= 1;
+        let consumed = self.pt.offset != start.offset;
+        self.restore(start);
+        Match::new(Value::Null, if logical { result.ok && consumed } else { result.ok })
+    }
+
+    fn parse_not(&mut self, expr: &Expr, logical: bool) -> Match {
+        let start = self.pt;
+        self.invert_failures = !self.invert_failures;
+        self.skip_depth += 1;
+        let result = self.parse_expr(expr.inner.as_ref().unwrap());
+        self.skip_depth -= 1;
+        self.invert_failures = !self.invert_failures;
+        let consumed = self.pt.offset != start.offset;
+        self.restore(start);
+        Match::new(Value::Null, if logical { !result.ok && consumed } else { !result.ok })
+    }
+
+    fn parse_any(&mut self) -> Match {
+        if self.current_char().is_none() {
+            self.fail_at(false, self.pt, ".");
+            return Match::new(Value::Null, false);
+        }
+        self.fail_at(true, self.pt, ".");
+        self.advance();
+        Match::new(Value::Null, true)
+    }
+
+    fn lower_code_point(value: u32) -> u32 {
+        char::from_u32(value)
+            .and_then(|value| value.to_lowercase().next())
+            .map(|value| value as u32)
+            .unwrap_or(value)
+    }
+
+    fn parse_char_class(&mut self, expr: &Expr) -> Match {
+        let current_char = match self.current_char() {
+            Some(value) => value,
+            None => {
+                self.fail_at(false, self.pt, &expr.value);
+                return Match::new(Value::Null, false);
+            }
+        };
+        let mut current = current_char as u32;
+        if expr.ignore_case {
+            current = Self::lower_code_point(current);
+        }
+        let mut found = expr.chars.contains(&current);
+        if !found {
+            for range in expr.ranges.chunks_exact(2) {
+                if current >= range[0] && current <= range[1] {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if !found {
+            found = expr.classes.iter().any(|range| {
+                current >= range.lo && current <= range.hi &&
+                    (current - range.lo) % range.stride == 0
+            });
+        }
+        let matched = if expr.inverted { !found } else { found };
+        self.fail_at(matched, self.pt, &expr.value);
+        if !matched {
+            return Match::new(Value::Null, false);
+        }
+        self.advance();
+        Match::new(Value::Null, true)
+    }
+
+    fn parse_choice(&mut self, expr: &Expr) -> Match {
+        for alternative in &expr.items {
+            let result = self.parse_expr(alternative);
+            if result.ok {
+                return result;
+            }
+        }
+        Match::new(Value::Null, false)
+    }
+
+    fn parse_code(&mut self, expr: &Expr) -> Match {
+        if !expr.not_skip && self.skipping() {
+            return Match::new(Value::Null, true);
+        }
+        Match::new(expr.action_run.unwrap()(self), true)
+    }
+
+    fn parse_labeled(&mut self, expr: &Expr) -> Match {
+        let start = self.pt;
+        let result = self.parse_expr(expr.inner.as_ref().unwrap());
+        if result.ok && !expr.label.is_empty() && !self.skipping() {
+            let value = if expr.text_capture {
+                Value::String(self.slice_from(start))
+            } else {
+                result.value.clone()
+            };
+            self.vstack.last_mut().unwrap().insert(expr.label.clone(), value);
+        }
+        result
+    }
+
+    fn parse_literal(&mut self, expr: &Expr) -> Match {
+        let start = self.pt;
+        for wanted_char in expr.value.chars() {
+            let mut wanted = wanted_char as u32;
+            let mut current = self.current_char().map(|value| value as u32);
+            if expr.ignore_case {
+                wanted = Self::lower_code_point(wanted);
+                current = current.map(Self::lower_code_point);
+            }
+            if current != Some(wanted) {
+                self.fail_at(false, start, &expr.want);
+                self.restore(start);
+                return Match::new(Value::Null, false);
+            }
+            self.advance();
+        }
+        self.fail_at(true, start, &expr.want);
+        Match::new(Value::Null, true)
+    }
+
+    fn parse_one_or_more(&mut self, expr: &Expr) -> Match {
+        let mut values = Vec::new();
+        let mut matched = false;
+        loop {
+            let before = self.pt.offset;
+            let result = self.parse_expr(expr.inner.as_ref().unwrap());
+            if !result.ok {
+                return Match::new(if values.is_empty() { Value::Null } else { Value::Array(values) }, matched);
+            }
+            if self.pt.offset == before {
+                self.add_err("repetition matched empty input");
+                return Match::new(Value::Null, false);
+            }
+            matched = true;
+            if !result.value.is_null() {
+                values.push(result.value);
+            }
+        }
+    }
+
+    fn parse_zero_or_more(&mut self, expr: &Expr) -> Match {
+        let mut values = Vec::new();
+        loop {
+            let before = self.pt.offset;
+            let result = self.parse_expr(expr.inner.as_ref().unwrap());
+            if !result.ok {
+                return Match::new(if values.is_empty() { Value::Null } else { Value::Array(values) }, true);
+            }
+            if self.pt.offset == before {
+                self.add_err("repetition matched empty input");
+                return Match::new(Value::Null, false);
+            }
+            if !result.value.is_null() {
+                values.push(result.value);
+            }
+        }
+    }
+
+    fn parse_zero_or_one(&mut self, expr: &Expr) -> Match {
+        let result = self.parse_expr(expr.inner.as_ref().unwrap());
+        Match::new(result.value, true)
+    }
+
+    fn parse_sequence(&mut self, expr: &Expr) -> Match {
+        let start = self.pt;
+        let mut values = Vec::new();
+        for item in &expr.items {
+            let result = self.parse_expr(item);
+            if !result.ok {
+                self.restore(start);
+                return Match::new(Value::Null, false);
+            }
+            if !self.skipping() && !result.value.is_null() {
+                values.push(result.value);
+            }
+        }
+        Match::new(if values.is_empty() { Value::Null } else { Value::Array(values) }, true)
+    }
+
+    fn parse_rule_ref(&mut self, expr: &Expr) -> Match {
+        let index = match self.rules.get(&expr.name) {
+            Some(value) => *value,
+            None => {
+                self.add_err(format!("undefined rule: {}", expr.name));
+                return Match::new(Value::Null, false);
+            }
+        };
+        let rule = self.rules_array[index].clone();
+        self.parse_rule(&rule)
+    }
+
+    fn parse_rule_index_ref(&mut self, expr: &Expr) -> Match {
+        if expr.index >= self.rules_array.len() {
+            self.add_err(format!("undefined rule index: {}", expr.index));
+            return Match::new(Value::Null, false);
+        }
+        let rule = self.rules_array[expr.index].clone();
+        self.parse_rule(&rule)
+    }
+
+    fn parse_recovery(&mut self, expr: &Expr) -> Match {
+        let mut recovery = HashMap::new();
+        for label in &expr.failure_labels {
+            recovery.insert(label.clone(), expr.recover_expr.as_ref().unwrap().as_ref().clone());
+        }
+        self.recovery_stack.push(recovery);
+        let result = self.parse_expr(expr.inner.as_ref().unwrap());
+        self.recovery_stack.pop();
+        result
+    }
+
+    fn parse_throw(&mut self, expr: &Expr) -> Match {
+        for index in (0..self.recovery_stack.len()).rev() {
+            if let Some(recovery) = self.recovery_stack[index].get(&expr.label).cloned() {
+                let result = self.parse_expr(&recovery);
+                if result.ok {
+                    return result;
+                }
+            }
+        }
+        Match::new(Value::Null, false)
+    }
+}
+`
