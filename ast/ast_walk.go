@@ -49,6 +49,9 @@ func Walk(v Visitor, expr Expression) {
 		Walk(v, expr.Expr)
 	case *OneOrMoreExpr:
 		Walk(v, expr.Expr)
+	case *RecoveryExpr:
+		Walk(v, expr.Expr)
+		Walk(v, expr.RecoverExpr)
 	case *Rule:
 		Walk(v, expr.Expr)
 	case *RuleRefExpr:
@@ -58,6 +61,8 @@ func Walk(v Visitor, expr Expression) {
 			Walk(v, e)
 		}
 	case *CodeExpr:
+		// Nothing to do
+	case *ThrowExpr:
 		// Nothing to do
 	case *ZeroOrMoreExpr:
 		Walk(v, expr.Expr)

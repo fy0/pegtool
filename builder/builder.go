@@ -279,6 +279,7 @@ func (b *Builder) BuildParser(grammar *ast.Grammar) error {
 	if !b.GrammarOnly {
 		b.writeStaticCodeWrap()
 	}
+	b.Shims.WriteFooter(b)
 	if b.indentWriter.depth != 0 && b.Err == nil {
 		b.Err = fmt.Errorf("builder: unbalanced indentation depth %d", b.indentWriter.depth)
 	}
@@ -701,6 +702,7 @@ type OverrideShims struct {
 	WriteNilLine        func(b *Builder)
 	WriteArray          func(b *Builder, typeName string, newline bool, inside func())
 	WriteExprBlock      func(b *Builder, name string, newline bool, inside func())
+	WriteFooter         func(b *Builder)
 }
 
 func (b *Builder) Init() {
@@ -1254,4 +1256,5 @@ func (b *Builder) Init() {
 		b.Dedent()
 		b.Writeln("},")
 	}
+	b.Shims.WriteFooter = func(_ *Builder) {}
 }
