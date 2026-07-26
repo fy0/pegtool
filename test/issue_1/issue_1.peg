@@ -4,5 +4,11 @@ package issue1
 type ParserCustomData struct {}
 }
 
-TableRef <- database:(ID '.')? table:ID    { return fmt.Sprintf("%v.%s", database, table) }
-ID <- [a-z]+                               { return string(c.text) }
+TableRef <- database:(prefix:<ID> '.' { return prefix })? table:<ID> {
+    if database == nil {
+        return table
+    }
+    return database.(string) + "." + table.(string)
+}
+
+ID <- [a-z]+

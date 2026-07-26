@@ -83,6 +83,34 @@ func TestBuildParserIncludesNoMatchFormatterHook(t *testing.T) {
 	}
 }
 
+func TestBuildParserUsesAllocationEfficientMemoTable(t *testing.T) {
+	p := bootstrap.NewParser()
+	g, err := p.Parse("", strings.NewReader(`start = "a"`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := BuildParser(&out, g, Optimize(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	generated := out.String()
+	for _, snippet := range []string{
+		"memo1       []map[any]*resultTuple",
+		"memoBlocks  []*[memoBlockSize]resultTuple",
+		"func (p *parser) newMemoizedResult(val any, ok bool) *resultTuple",
+		"p.memo1 = make([]map[any]*resultTuple, len(p.data)+1)",
+	} {
+		if !strings.Contains(generated, snippet) {
+			t.Fatalf("generated parser missing snippet %q", snippet)
+		}
+	}
+	if strings.Contains(generated, "setMemoized := func") {
+		t.Fatal("generated parser still uses the escaping memoization closure")
+	}
+}
+
 func TestBuildParserIndentsGrammar(t *testing.T) {
 	p := bootstrap.NewParser()
 	g, err := p.Parse("", strings.NewReader("start = other\nother = \"a\""))

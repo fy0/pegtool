@@ -15,9 +15,9 @@ The pigeon command generates Go, Haxe, TypeScript, C#, and Rust parsers based on
   * More memory efficient - reduces memory allocations
   * Generates cleaner and less lines of code
 
-* `parseSeqExpr` only collects values that are explicitly returned, improving performance:
-  * Example 1: `e <- items:(__ Integer __)+ EOF { return items }` returns an empty array `[]` since no values are explicitly marked for collection
-  * Example 2: `e <- items:(__ i:Integer __ { return i })+ EOF { return items }` returns `[1, 2, 3]` because integers are explicitly collected
+* `parseSeqExpr` does not construct a value slice; repetitions collect only non-nil values explicitly returned by nested actions:
+  * Example 1: `e <- items:(__ Integer __)+ EOF { return items }` returns `nil` since no values are explicitly returned
+  * Example 2: `e <- items:(__ i:Integer __ { return i })+ EOF { return items }` returns `[1, 2, 3]` because the integers are explicitly returned
   * This is more efficient than the original version which would return `[[nil, 1, nil], [nil, 2, nil], [nil, 3, nil]]` with unnecessary nil values
 
 * String capture:

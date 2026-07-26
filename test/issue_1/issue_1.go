@@ -28,17 +28,25 @@ var g = &grammar{
 						&labeledExpr{
 							label: "database",
 							expr: &zeroOrOneExpr{
-								expr: &seqExpr{
-									exprs: []any{
-										&ruleRefExpr{name: "ID"},
-										&litMatcher{val: ".", want: "\".\""},
+								expr: &actionExpr{
+									run: (*parser).call_onTableRef_5,
+									expr: &seqExpr{
+										exprs: []any{
+											&labeledExpr{
+												label:       "prefix",
+												expr:        &ruleRefExpr{name: "ID"},
+												textCapture: true,
+											},
+											&litMatcher{val: ".", want: "\".\""},
+										},
 									},
 								},
 							},
 						},
 						&labeledExpr{
-							label: "table",
-							expr:  &ruleRefExpr{name: "ID"},
+							label:       "table",
+							expr:        &ruleRefExpr{name: "ID"},
+							textCapture: true,
 						},
 					},
 				},
@@ -46,32 +54,33 @@ var g = &grammar{
 		},
 		{
 			name: "ID",
-			expr: &actionExpr{
-				run: (*parser).call_onID_1,
-				expr: &oneOrMoreExpr{
-					expr: &charClassMatcher{
-						val:    "[a-z]",
-						ranges: []rune{'a', 'z'},
-					},
+			expr: &oneOrMoreExpr{
+				expr: &charClassMatcher{
+					val:    "[a-z]",
+					ranges: []rune{'a', 'z'},
 				},
 			},
 		},
 	},
 }
 
+func (p *parser) call_onTableRef_5() any {
+	stack := p.vstack[len(p.vstack)-1]
+	return (func(c *current, prefix any) any {
+		return prefix
+		return nil
+	})(&p.cur, stack["prefix"])
+}
+
 func (p *parser) call_onTableRef_1() any {
 	stack := p.vstack[len(p.vstack)-1]
 	return (func(c *current, database, table any) any {
-		return fmt.Sprintf("%!v(MISSING).%!s(MISSING)", database, table)
+		if database == nil {
+			return table
+		}
+		return database.(string) + "." + table.(string)
 		return nil
 	})(&p.cur, stack["database"], stack["table"])
-}
-
-func (p *parser) call_onID_1() any {
-	return (func(c *current) any {
-		return string(c.text)
-		return nil
-	})(&p.cur)
 }
 
 var (
@@ -127,6 +136,14 @@ func (ss *parserStack) top() *savepoint {
 // option is a function that can set an option on the parser. It returns
 // the previous setting as an option.
 type option func(*parser) option
+
+func noMatchErrorFormatter(fn func(position, []byte, []string) error) option {
+	return func(p *parser) option {
+		old := p.noMatchErrorFormatter
+		p.noMatchErrorFormatter = fn
+		return noMatchErrorFormatter(old)
+	}
+}
 
 // statistics adds a user provided Stats struct to the parser to allow
 // the user to process the results after the parsing has finished.
@@ -209,10 +226,12 @@ type current struct {
 
 // the AST types...
 
+// nolint: structcheck
 type grammar struct {
 	rules []*rule
 }
 
+// nolint: structcheck
 type rule struct {
 	name        string
 	displayName string
@@ -220,72 +239,85 @@ type rule struct {
 	varExists   bool
 }
 
+// nolint: structcheck
 type choiceExpr struct {
 	alternatives []any
 }
 
+// nolint: structcheck
 type actionExpr struct {
 	expr any
 	run  func(*parser) any
 }
 
+// nolint: structcheck
 type recoveryExpr struct {
 	expr         any
 	recoverExpr  any
 	failureLabel []string
 }
 
+// nolint: structcheck
 type seqExpr struct {
 	exprs []any
 }
 
+// nolint: structcheck
 type throwExpr struct {
 	label string
 }
 
+// nolint: structcheck
 type labeledExpr struct {
 	label       string
 	expr        any
 	textCapture bool
 }
 
+// nolint: structcheck
 type expr struct {
 	expr any
 }
 
 type (
-	andExpr        expr
-	notExpr        expr
-	andLogicalExpr expr
-	notLogicalExpr expr
-	zeroOrOneExpr  expr
-	zeroOrMoreExpr expr
-	oneOrMoreExpr  expr
+	andExpr        expr // nolint: structcheck
+	notExpr        expr // nolint: structcheck
+	andLogicalExpr expr // nolint: structcheck
+	notLogicalExpr expr // nolint: structcheck
+	zeroOrOneExpr  expr // nolint: structcheck
+	zeroOrMoreExpr expr // nolint: structcheck
+	oneOrMoreExpr  expr // nolint: structcheck
 )
 
+// nolint: structcheck
 type ruleRefExpr struct {
 	name string
 }
 
+// nolint: structcheck
 type andCodeExpr struct {
 	run func(*parser) bool
 }
 
+// nolint: structcheck
 type notCodeExpr struct {
 	run func(*parser) bool
 }
 
+// nolint: structcheck
 type litMatcher struct {
 	val        string
 	ignoreCase bool
 	want       string
 }
 
+// nolint: structcheck
 type codeExpr struct {
 	run     func(*parser) any
 	notSkip bool
 }
 
+// nolint: structcheck
 type charClassMatcher struct {
 	val        string
 	chars      []rune
@@ -295,7 +327,7 @@ type charClassMatcher struct {
 	inverted   bool
 }
 
-type anyMatcher struct{}
+type anyMatcher struct{} // nolint: structcheck
 
 // errList cumulates the errors found by the parser.
 type errList []error
@@ -357,12 +389,17 @@ func (p *parserError) Error() string {
 	return p.prefix + ": " + p.Inner.Error()
 }
 
+// nolint: structcheck,deadcode
 type resultTuple struct {
 	v   any
 	b   bool
 	end savepoint
 }
 
+// Leave room for Go's malloc header so each pointerful block fits in 8 KiB.
+const memoBlockSize = 127
+
+// nolint: varcheck
 const choiceNoMatch = -1
 
 // Stats stores some statistics, gathered during parsing
@@ -387,6 +424,7 @@ type Stats struct {
 	ChoiceAltCnt map[string]map[string]int
 }
 
+// nolint: structcheck,maligned
 type parser struct {
 	filename string
 	pt       savepoint
@@ -401,9 +439,11 @@ type parser struct {
 	debug    bool
 
 	// memoization table for the packrat algorithm:
-	// map[offset in source] map[expression or rule] {value, match}
-	memo1 map[int]map[any]*resultTuple
-	memo2 map[int]map[any]*resultTuple
+	// [offset in source] map[expression or rule] {value, match}
+	memo1       []map[any]*resultTuple
+	memo2       []map[any]*resultTuple
+	memoBlocks  []*[memoBlockSize]resultTuple
+	memoBlockIx int
 
 	// rules table, maps the rule identifier to the rule node
 	rules      map[string]*rule
@@ -417,6 +457,7 @@ type parser struct {
 	maxFailPos            position
 	maxFailExpected       []string
 	maxFailInvertExpected bool
+	noMatchErrorFormatter func(position, []byte, []string) error
 
 	// max number of expressions to be parsed
 	maxExprCnt uint64
@@ -456,8 +497,6 @@ func newParser(filename string, b []byte, opts ...option) *parser {
 		maxFailPos:      position{col: 1, line: 1},
 		maxFailExpected: make([]string, 0, 20),
 		Stats:           &stats,
-		memo1:           map[int]map[any]*resultTuple{},
-		memo2:           map[int]map[any]*resultTuple{},
 		// start rule is rule [0] unless an alternate entrypoint is specified
 		entrypoint: "TableRef",
 		scStack:    []bool{false},
@@ -603,6 +642,16 @@ func (p *parser) addErrAt(err error, pos position, expected []string) {
 	p.errs.add(pe)
 }
 
+func (p *parser) buildNoMatchError(pos position, expected []string) error {
+	if p.noMatchErrorFormatter != nil {
+		if err := p.noMatchErrorFormatter(pos, p.data, expected); err != nil {
+			return err
+		}
+	}
+
+	return errors.New("no match found, expected: " + listJoin(expected, ", ", "or"))
+}
+
 func (p *parser) failAt(fail bool, pos *position, want string) {
 	// process fail if parsing fails and not inverted or parsing succeeds and invert is set
 	if fail == p.maxFailInvertExpected {
@@ -669,6 +718,7 @@ func (p *parser) buildRulesTable(g *grammar) {
 	}
 }
 
+// nolint: gocyclo
 func (p *parser) parse(grammar *grammar) (val any, err error) {
 	if grammar == nil {
 		grammar = g
@@ -730,7 +780,7 @@ func (p *parser) parse(grammar *grammar) (val any, err error) {
 			if eof {
 				expected = append(expected, "EOF")
 			}
-			p.addErrAt(errors.New("no match found, expected: "+listJoin(expected, ", ", "or")), p.maxFailPos, expected)
+			p.addErrAt(p.buildNoMatchError(p.maxFailPos, expected), p.maxFailPos, expected)
 		}
 
 		return nil, p.errs.err()
@@ -776,11 +826,23 @@ func (p *parser) parseRule(rule *rule) (any, bool) {
 	return val, ok
 }
 
+func (p *parser) newMemoizedResult(val any, ok bool) *resultTuple {
+	blockIndex := p.memoBlockIx / memoBlockSize
+	if blockIndex == len(p.memoBlocks) {
+		p.memoBlocks = append(p.memoBlocks, new([memoBlockSize]resultTuple))
+	}
+	result := &p.memoBlocks[blockIndex][p.memoBlockIx%memoBlockSize]
+	p.memoBlockIx++
+	*result = resultTuple{val, ok, p.pt}
+	return result
+}
+
 func (p *parser) parseExprWrap(expr any) (any, bool) {
 	val, ok := p.parseExpr(expr)
 	return val, ok
 }
 
+// nolint: gocyclo
 func (p *parser) parseExpr(expr any) (any, bool) {
 	p.ExprCnt++
 	if p.ExprCnt > p.maxExprCnt {
@@ -788,36 +850,24 @@ func (p *parser) parseExpr(expr any) (any, bool) {
 	}
 
 	skipCode := p.checkSkipCode()
-	memo := p.memo1
-	if skipCode {
-		memo = p.memo2
-	}
-
-	setMemoized := func(pos int, expr any, val resultTuple) {
-		if !p.memoized {
-			return
-		}
-		if memo[pos] == nil {
-			memo[pos] = map[any]*resultTuple{}
-		}
-		memo[pos][expr] = &val
-	}
-
+	var memo []map[any]*resultTuple
 	if p.memoized {
-		getMemoized := func(expr any) *resultTuple {
-			pos := p.pt.offset
-			if memo[pos] == nil {
-				return nil
+		if skipCode {
+			if p.memo2 == nil {
+				p.memo2 = make([]map[any]*resultTuple, len(p.data)+1)
 			}
-			return memo[pos][expr]
+			memo = p.memo2
+		} else {
+			if p.memo1 == nil {
+				p.memo1 = make([]map[any]*resultTuple, len(p.data)+1)
+			}
+			memo = p.memo1
 		}
-
-		if m := getMemoized(expr); m != nil {
+		if m := memo[p.pt.offset][expr]; m != nil {
 			p.restore(&m.end)
 			return m.v, m.b
 		}
 	}
-
 	pos := p.pt.offset
 
 	var val any
@@ -867,7 +917,18 @@ func (p *parser) parseExpr(expr any) (any, bool) {
 		panic(fmt.Sprintf("unknown expression type %T", expr))
 	}
 
-	setMemoized(pos, expr, resultTuple{val, ok, p.pt})
+	if p.memoized {
+		entries := memo[pos]
+		if entries == nil {
+			entries = make(map[any]*resultTuple)
+			memo[pos] = entries
+		}
+		if result := entries[expr]; result != nil {
+			*result = resultTuple{val, ok, p.pt}
+		} else {
+			entries[expr] = p.newMemoizedResult(val, ok)
+		}
+	}
 	return val, ok
 }
 
@@ -951,6 +1012,7 @@ func (p *parser) parseAnyMatcher(any *anyMatcher) (any, bool) {
 	return nil, true
 }
 
+// nolint: gocyclo
 func (p *parser) parseCharClassMatcher(chr *charClassMatcher) (any, bool) {
 	if p.debug {
 		defer p.out(p.in("parseCharClassMatcher"))
@@ -1191,22 +1253,13 @@ func (p *parser) parseSeqExpr(seq *seqExpr) (any, bool) {
 		defer p.out(p.in("parseSeqExpr"))
 	}
 
-	var vals []any
-	notSkipCode := p.checkSkipCode()
-
 	pt := p.pt
 	for _, expr := range seq.exprs {
-		val, ok := p.parseExprWrap(expr)
+		_, ok := p.parseExprWrap(expr)
 		if !ok {
 			p.restore(&pt)
 			return nil, false
 		}
-		if notSkipCode && val != nil {
-			vals = append(vals, val)
-		}
-	}
-	if len(vals) > 0 {
-		return vals, true
 	}
 	return nil, true
 }
