@@ -125,6 +125,8 @@ The long aliases `typescript`, `csharp`, `c#`, and `haxe` are also accepted. Gra
 
 The generated TypeScript module exports `parse`, `Parser`, and `ParserOptions`. The C# source exposes `PigeonParser.Parse` and `PigeonParser.ParserOptions`. Rust exposes `PigeonParser::parse`, `PigeonParser::parse_with_options`, and the cloneable `Value` enum used by action labels and return values.
 
+Generated Haxe parsers embed only the Unicode tables used by the grammar and have no Haxe library dependency by default. Pass `-haxe-use-hxunicode` to keep parsers with Unicode character classes smaller; in that mode, install the dependency with `haxelib install hxUnicode` and compile with `-lib hxUnicode`. The generated source reports these commands directly if the library is missing.
+
 TypeScript and Rust initializer blocks are emitted at module scope. A C# initializer block is emitted inside the generated partial `PigeonParser` class, so it should contain nested types, fields, and helper methods rather than namespace or top-level declarations.
 
 TypeScript and C# action labels use `any` and `object?` respectively. C# labels that are language keywords are emitted as verbatim identifiers, for example the PEG label `params` is referenced as `@params` in C# action code. Rust labels use `Value`; its `String`, `Int`, `Float`, `Bool`, `Array`, `Object`, and `Custom` variants cover parser values and user-defined types.

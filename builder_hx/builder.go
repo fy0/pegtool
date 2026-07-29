@@ -48,9 +48,19 @@ func haxeRuneArrayWidth(values []rune) int {
 func haxeClassArrayWidth(classes []string) int {
 	width := 2
 	for _, class := range classes {
-		width += len("Unicode.") + len(class) + len(", ")
+		width += len("hxUnicode.U.") + len(class) + len(", ")
 	}
 	return width
+}
+
+// UseHxUnicode makes generated Unicode character classes reference the
+// hxUnicode haxelib instead of embedding their range data.
+func UseHxUnicode(enable bool) base.Option {
+	return func(b *base.Builder) base.Option {
+		previous := b.HaxeUseHxUnicode
+		b.HaxeUseHxUnicode = enable
+		return UseHxUnicode(previous)
+	}
 }
 
 func writeHaxeRuneArray(b *base.Builder, values []rune, ignoreCase bool) {
@@ -69,26 +79,117 @@ func writeHaxeRuneArray(b *base.Builder, values []rune, ignoreCase bool) {
 	})
 }
 
+func writeHaxeUnicodeRanges(b *base.Builder, count int, valueAt func(int) (uint32, uint32, uint32)) {
+	var line strings.Builder
+	for i := range count {
+		lo, hi, stride := valueAt(i)
+		value := fmt.Sprintf("[%d,%d,%d],", lo, hi, stride)
+		if line.Len() > 0 && line.Len()+1+len(value) > maxInlineArrayWidth {
+			b.WritelnItemf("%s", line.String())
+			line.Reset()
+		}
+		if line.Len() > 0 {
+			line.WriteByte(' ')
+		}
+		line.WriteString(value)
+	}
+	if line.Len() > 0 {
+		b.WritelnItemf("%s", line.String())
+	}
+}
+
+func haxeUnicodeTable(name string) (*unicode.RangeTable, error) {
+	if table := unicode.Categories[name]; table != nil {
+		return table, nil
+	}
+	if table := unicode.Properties[name]; table != nil {
+		return table, nil
+	}
+	if table := unicode.Scripts[name]; table != nil {
+		return table, nil
+	}
+	return nil, fmt.Errorf("unknown Unicode class %q", name)
+}
+
+func writeHaxeUnicodeTable(b *base.Builder, name string) {
+	table, err := haxeUnicodeTable(name)
+	if err != nil {
+		b.Err = err
+		return
+	}
+
+	b.WritelnItemf("{R16: [")
+	b.Indent()
+	writeHaxeUnicodeRanges(b, len(table.R16), func(i int) (uint32, uint32, uint32) {
+		item := table.R16[i]
+		return uint32(item.Lo), uint32(item.Hi), uint32(item.Stride)
+	})
+	b.Dedent()
+	b.Writelnf("], R32: [")
+	b.Indent()
+	writeHaxeUnicodeRanges(b, len(table.R32), func(i int) (uint32, uint32, uint32) {
+		item := table.R32[i]
+		return item.Lo, item.Hi, item.Stride
+	})
+	b.Dedent()
+	b.Writelnf("], LatinOffset: %d},", table.LatinOffset)
+}
+
 func writeHaxeClassArray(b *base.Builder, classes []string) {
-	multiline := haxeClassArrayWidth(classes) > maxInlineArrayWidth
-	b.WriteArray("*unicode.RangeTable", multiline, func() {
-		for _, class := range classes {
-			if multiline {
-				b.WritelnItemf("Unicode.%s,", class)
-			} else {
-				b.WriteItemf("Unicode.%s,", class)
+	if b.HaxeUseHxUnicode {
+		multiline := haxeClassArrayWidth(classes) > maxInlineArrayWidth
+		b.WriteArray("UnicodeRangeTable", multiline, func() {
+			for _, class := range classes {
+				if multiline {
+					b.WritelnItemf("hxUnicode.U.%s,", class)
+				} else {
+					b.WriteItemf("hxUnicode.U.%s,", class)
+				}
 			}
+		})
+		return
+	}
+
+	b.WriteArray("UnicodeRangeTable", true, func() {
+		for _, class := range classes {
+			writeHaxeUnicodeTable(b, class)
 		}
 	})
+}
+
+func grammarUsesUnicodeClasses(g *ast.Grammar) bool {
+	found := false
+	ast.Inspect(g, func(expr ast.Expression) bool {
+		if found || expr == nil {
+			return false
+		}
+		if matcher, ok := expr.(*ast.CharClassMatcher); ok && len(matcher.UnicodeClasses) > 0 {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func writeHxUnicodeRequirement(b *base.Builder) {
+	if !b.HaxeUseHxUnicode || !b.RangeTable {
+		return
+	}
+	b.Writeln(`#if !hxUnicode
+#error "This parser uses hxUnicode. Run 'haxelib install hxUnicode' and compile with '-lib hxUnicode'."
+#end`)
+	b.Writeln("")
 }
 
 // BuildParser builds the PEG parser using the provider grammar. The code is
 // written to the specified w.
 func BuildParser(w io.Writer, g *ast.Grammar, opts ...base.Option) error {
-	b0 := base.Builder{W: w, RecvName: "c", Target: "haxe", IndentUnit: "\t"}
+	b0 := base.Builder{W: w, RecvName: "c", Target: "haxe", GrammarName: "g", IndentUnit: "\t"}
 	b := &BuilderHx{b0}
 	b.Init()
 	b.SetOptions(opts)
+	b.RangeTable = grammarUsesUnicodeClasses(g)
 	return b.BuildParser(g)
 }
 
@@ -102,19 +203,26 @@ func (b *BuilderHx) Init() {
 	b.CallPredFuncTemplate = callPredFuncTemplate
 
 	b.Shims.WriteInit = func(b *base.Builder, init *ast.CodeBlock) {
-		if init == nil {
+		if b.GrammarOnly && init == nil {
 			return
 		}
-
-		// remove opening and closing braces
 		b.Writef("%s", codeGeneratedComment)
 		b.Writeln(`import haxe.Exception;
 import haxe.ds.GenericStack;
 import haxe.io.BytesBuffer;
-import haxe.io.Bytes;
 import haxe.ds.HashMap;
 import haxe.iterators.StringIteratorUnicode;`)
 
+		if init == nil {
+			b.Writeln(`
+class ParserCustomData {
+	public function new() {}
+}`)
+			b.Writeln("")
+			return
+		}
+
+		// remove opening and closing braces
 		val := strings.TrimSpace(b.TemplateRender(init.Val[1:len(init.Val)-1], false))
 		if val != "" {
 			b.Writeln("")
@@ -124,6 +232,7 @@ import haxe.iterators.StringIteratorUnicode;`)
 	}
 
 	b.Shims.WriteGrammar = func(b *base.Builder, g *ast.Grammar) {
+		writeHxUnicodeRequirement(b)
 		// transform the ast grammar to the self-contained, no dependency version
 		// of the parser-generator grammar.
 		m := map[string]*base.ExprInfo{}
@@ -149,6 +258,7 @@ import haxe.iterators.StringIteratorUnicode;`)
 	}
 
 	b.Shims.WriteGrammar2 = func(b *base.Builder, g *ast.Grammar) {
+		writeHxUnicodeRequirement(b)
 		// transform the ast grammar to the self-contained, no dependency version
 		// of the parser-generator grammar.
 		b.Writelnf("var g = {")

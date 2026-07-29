@@ -293,6 +293,14 @@ typedef CodeExpr = {
 	var notSkip:Bool;
 }
 
+typedef UnicodeRangeChar = Array<UInt>;
+
+typedef UnicodeRangeTable = {
+	var R16:Array<UnicodeRangeChar>;
+	var R32:Array<UnicodeRangeChar>;
+	var LatinOffset:Int;
+}
+
 typedef CharClassMatcher = {
 	// ==template== {{ if .SetRulePos }}
 	var pos:Position;
@@ -300,7 +308,7 @@ typedef CharClassMatcher = {
 	var val:String;
 	@:optional var chars:Array<UInt>;
 	@:optional var ranges:Array<UInt>;
-	@:optional var classes:Array<Unicode.RangeTable>;
+	@:optional var classes:Array<UnicodeRangeTable>;
 	@:optional var ignoreCase:Bool;
 	@:optional var inverted:Bool;
 }
@@ -310,6 +318,78 @@ typedef AnyMatcher = Position;
 // {{ else }} ==template==
 typedef AnyMatcher = {}
 // {{ end }} ==template==
+
+var unicodeLinearMax = 18;
+var unicodeMaxLatin1 = 0x00FF;
+
+private function unicodeIs16(ranges:Array<UnicodeRangeChar>, r:UInt):Bool {
+	if (ranges.length <= unicodeLinearMax || r <= unicodeMaxLatin1) {
+		for (range in ranges) {
+			if (r < range[0]) {
+				return false;
+			}
+			if (r <= range[1]) {
+				return range[2] == 1 || (r - range[0]) % range[2] == 0;
+			}
+		}
+		return false;
+	}
+
+	var lo = 0;
+	var hi = ranges.length;
+	while (lo < hi) {
+		var middle = lo + Std.int((hi - lo) / 2);
+		var range = ranges[middle];
+		if (range[0] <= r && r <= range[1]) {
+			return range[2] == 1 || (r - range[0]) % range[2] == 0;
+		}
+		if (r < range[0]) {
+			hi = middle;
+		} else {
+			lo = middle + 1;
+		}
+	}
+	return false;
+}
+
+private function unicodeIs32(ranges:Array<UnicodeRangeChar>, r:UInt):Bool {
+	if (ranges.length <= unicodeLinearMax) {
+		for (range in ranges) {
+			if (r < range[0]) {
+				return false;
+			}
+			if (r <= range[1]) {
+				return range[2] == 1 || (r - range[0]) % range[2] == 0;
+			}
+		}
+		return false;
+	}
+
+	var lo = 0;
+	var hi = ranges.length;
+	while (lo < hi) {
+		var middle = lo + Std.int((hi - lo) / 2);
+		var range = ranges[middle];
+		if (range[0] <= r && r <= range[1]) {
+			return range[2] == 1 || (r - range[0]) % range[2] == 0;
+		}
+		if (r < range[0]) {
+			hi = middle;
+		} else {
+			lo = middle + 1;
+		}
+	}
+	return false;
+}
+
+function unicodeIs(rangeTable:UnicodeRangeTable, r:UInt):Bool {
+	var r16 = rangeTable.R16;
+	if (r16.length > 0 && r <= r16[r16.length - 1][1]) {
+		return unicodeIs16(r16, r);
+	}
+	var r32 = rangeTable.R32;
+	return r32.length > 0 && r >= r32[0][0] && unicodeIs32(r32, r);
+}
 
 // errList cumulates the errors found by the parser.
 class ErrList {
@@ -431,9 +511,10 @@ class Parser {
 	public var memoize:Bool;
 	// {{ end }} ==template==
 	// ==template== {{ if not .Optimize }}
-	// memoization table for the packrat algorithm:
-	// map[offset in source] map[expression or rule] {value, match}
-	public var memo:Map<Int, Map<Any, ResultTuple>>; // map[int]map[any]resultTuple
+	// Memoization tables indexed directly by source offset. Lookahead parsing
+	// uses a separate table because actions are skipped there.
+	public var memo1:Array<Map<Any, ResultTuple>>;
+	public var memo2:Array<Map<Any, ResultTuple>>;
 
 	// {{ end }} ==template==
 	// rules table, maps the rule identifier to the rule node
@@ -646,23 +727,30 @@ class Parser {
 
 	// read advances the parser to the next rune.
 	function read() {
-		this.pt.offset += this.pt.w > 0 ? 1 : 0;
-		// rn, n := utf8.DecodeRune(p.data[p.pt.offset:])
-		// p.pt.rn = rn
-		// p.pt.w = n
-		// p.pt.col++
-		var rn = this.data.charAt(this.pt.offset);
-		var rnB = Bytes.ofString(rn);
-        var _rnInt = rn.charCodeAt(0);
-		this.pt.rn = _rnInt != null ? _rnInt : 0; // static compile requires !null
-		this.pt.w = rnB.length;
+		this.pt.offset += this.pt.w;
+		var first = this.data.charCodeAt(this.pt.offset);
+		if (first == null) {
+			this.pt.rn = 0;
+			this.pt.w = 0;
+		} else {
+			this.pt.rn = first;
+			this.pt.w = 1;
+			#if utf16
+			if (first >= 0xD800 && first <= 0xDBFF) {
+				var second = this.data.charCodeAt(this.pt.offset + 1);
+				if (second != null && second >= 0xDC00 && second <= 0xDFFF) {
+					this.pt.rn = ((first - 0xD800) << 10) + second - 0xDC00 + 0x10000;
+					this.pt.w = 2;
+				}
+			}
+			#end
+		}
 		this.pt.col ++;
 
-		// if rn == '\n' {
-        if (rn == '\n') {
-            this.pt.line++;
-            this.pt.col = 0;
-        }
+		if (this.pt.rn == 0x0A) {
+			this.pt.line++;
+			this.pt.col = 0;
+		}
 
 		// TODO 需要重做，rn为空不代表utf8的invalid
         // if (rn == '') {
@@ -700,36 +788,41 @@ class Parser {
 	}
 
 	// ==template== {{ if not .Optimize }}
-	function getMemoized(node:Any):{result:ResultTuple, ok:Bool} {
-		var m = this.memo[this.pt.offset];
-
-		if (m != null) {
-			var m2 = m[node];
-			if (m2 != null) {
-				return {
-					result: m2,
-					ok: true,
-				}
-			}
+	function getMemoized(node:Any):ResultTuple {
+		var memo = this.checkSkipCode() ? this.memo2 : this.memo1;
+		if (memo == null) {
+			return null;
 		}
-
-		return {
-			// ResultTuple{v:null, b: false, end: null}
-			result: null,
-			ok: false,
-		}
+		var entries = memo[this.pt.offset];
+		return entries == null ? null : entries[node];
 	}
 
-	function setMemoized(pt:Savepoint, node:Any, tuple:ResultTuple) {
-		if (this.memo == null) {
-			this.memo = new Map<Int, Map<Any, ResultTuple>>();
+	function setMemoized(pt:Savepoint, node:Any, val:Any, ok:Bool, end:Savepoint) {
+		var memo:Array<Map<Any, ResultTuple>>;
+		if (this.checkSkipCode()) {
+			if (this.memo2 == null) {
+				this.memo2 = [];
+			}
+			memo = this.memo2;
+		} else {
+			if (this.memo1 == null) {
+				this.memo1 = [];
+			}
+			memo = this.memo1;
 		}
-		var m = this.memo[pt.offset];
-		if (m == null) {
-			m = new Map<Any, ResultTuple>();
-			this.memo[pt.offset] = m;
+		var entries = memo[pt.offset];
+		if (entries == null) {
+			entries = new Map<Any, ResultTuple>();
+			memo[pt.offset] = entries;
 		}
-		m[node] = tuple;
+		var result = entries[node];
+		if (result == null) {
+			entries[node] = {v: val, b: ok, end: savepointClone(end)};
+		} else {
+			result.v = val;
+			result.b = ok;
+			result.end = savepointClone(end);
+		}
 	}
 	// {{ end }} ==template==
 
@@ -827,18 +920,18 @@ class Parser {
 
 	// ==template== {{ if not .Optimize }}
 	function parseRuleMemoize(rule:Rule):RetValOk {
-		var ret = this.getMemoized(rule); // ResultTuple
-		if (ret.ok) {
-			this.restore(ret.result.end);
+		var result = this.getMemoized(rule);
+		if (result != null) {
+			this.restore(savepointClone(result.end));
 			return {
-				val: ret.result.v,
-				ok: ret.result.b,
+				val: result.v,
+				ok: result.b,
 			}
 		}
 
-		var startMark = this.pt; // TODO: 这里需要值拷贝吗
+		var startMark = savepointClone(this.pt);
 		var ret2 = this.parseRule(rule);
-		this.setMemoized(startMark, rule, {v: ret2.val, b: ret2.ok, end: this.pt});
+		this.setMemoized(startMark, rule, ret2.val, ret2.ok, this.pt);
 
 		return ret2;
 	}
@@ -854,7 +947,7 @@ class Parser {
 		var ret:RetValOk = {val: null, ok: false};
 
 		// ==template== {{ if not .Optimize }}
-		var startMark = this.pt;
+		var startMark = savepointClone(this.pt);
 		// {{ end }} ==template==
 
 		// {{ if not .Optimize }}
@@ -912,21 +1005,21 @@ class Parser {
 	// ==template== {{ if .NeedExprWrap }}
 	function parseExprWrap(expr:AllExpr):RetValOk {
 		// ==template== {{ if not .Optimize }}
-		var pt:Savepoint = {
-			line: 0,
-			col: 0,
-			offset: 0,
-			rn: 0,
-			w: 0
-		};
+		var pt = savepointClone(this.pt);
+		if (this.memoize) {
+			var result = this.getMemoized(expr);
+			if (result != null) {
+				this.restore(savepointClone(result.end));
+				return {val: result.v, ok: result.b};
+			}
+		}
 		// {{ end }} ==template==
 
 		var ret = this.parseExpr(expr);
 
 		// ==template== {{ if not .Optimize }}
 		if (this.memoize) {
-			// this.setMemoized(pt, expr, resultTuple{val, ok, p.pt})
-			this.setMemoized(pt, expr, {v: ret.val, b: ret.ok, end: this.pt});
+			this.setMemoized(pt, expr, ret.val, ret.ok, this.pt);
 		}
 		// {{ end }} ==template==
 		return ret;
@@ -1032,7 +1125,7 @@ class Parser {
 	}
 
 	function parseAndExprBase(and:AndExpr, logical:Bool):RetValOk {
-		var pt = this.pt;
+		var pt = savepointClone(this.pt);
 
 		this.scStack.add(true);
 		var ret = this.parseExprWrap(and.expr);
@@ -1107,7 +1200,7 @@ class Parser {
 		// try to match in the list of Unicode classes
 		if (chr.classes != null) {
 			for (cl in chr.classes) {
-				if (Unicode.Is(cl, cur)) {
+				if (unicodeIs(cl, cur)) {
 					if (chr.inverted) {
 						this.failAt(false, this.pt, chr.val);
 						return {val: null, ok: false};
@@ -1234,19 +1327,22 @@ class Parser {
 	}
 
 	function parseOneOrMoreExpr(expr:OneOrMoreExpr):RetValOk {
-		var vals:Array<Any> = [];
+		var vals:Array<Any> = null;
 		var matched = false;
 
 		while (true) {
 			var ret = this.parseExprWrap(expr.expr);
 			if (!ret.ok) {
-				if (vals.length > 0) {
+				if (vals != null) {
 					return {val: vals, ok: matched};
 				}
 				return {val: null, ok: matched};
 			}
 			matched = true;
 			if (ret.val != null) {
+				if (vals == null) {
+					vals = [];
+				}
 				vals.push(ret.val);
 			}
 		}
@@ -1276,9 +1372,6 @@ class Parser {
 	// {{ end }} ==template==
 
 	function parseSeqExpr(seq:SeqExpr):RetValOk {
-		var vals = [];
-		var notSkipCode = this.checkSkipCode();
-
 		var pt = savepointClone(this.pt);
 		for (expr in seq.exprs) {
 			var ret = this.parseExprWrap(expr);
@@ -1286,12 +1379,6 @@ class Parser {
 				this.restore(pt);
 				return {val: null, ok: false};
 			}
-			if (notSkipCode && ret.val != null) {
-				vals.push(ret.val);
-			}
-		}
-		if (vals.length > 0) {
-			return {val: vals, ok: true};
 		}
 		return {val: null, ok: true};
 	}
@@ -1309,16 +1396,19 @@ class Parser {
 	}
 
 	function parseZeroOrMoreExpr(expr:ZeroOrMoreExpr):RetValOk {
-		var vals:Array<Any> = [];
+		var vals:Array<Any> = null;
 		while (true) {
 			var ret = this.parseExprWrap(expr.expr);
 			if (!ret.ok) {
-				if (vals.length > 0) {
+				if (vals != null) {
 					return {val: vals, ok: true};
 				}
 				return {val: null, ok: true};
 			}
 			if (ret.val != null) {
+				if (vals == null) {
+					vals = [];
+				}
 				vals.push(ret.val);
 			}
 		}

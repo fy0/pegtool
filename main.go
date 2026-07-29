@@ -74,6 +74,7 @@ func main() {
 		runFuncPrefixFlag      = fs.String("run-func-prefix", "", "set prefix for generated function name: `(*parser).call_onXXX`. For multiple peg files")
 		grammarOnlyFlag        = fs.Bool("grammar-only", false, "use it when you have multiple peg files")
 		optimizeRefExprByIndex = fs.Bool("optimize-ref-expr-by-index", false, "generate optimized parser grammar find RefExpr by index (~10% increased)")
+		haxeUseHxUnicode       = fs.Bool("haxe-use-hxunicode", false, "reference hxUnicode instead of embedding Unicode tables in Haxe parsers")
 		targetFlag             = fs.String("t", "go", "build target, default go")
 
 		// optimizeGrammar        = fs.Bool("optimize-grammar", false, "optimize the given grammar (EXPERIMENTAL FEATURE)")
@@ -102,6 +103,13 @@ func main() {
 	buildParser, formatGo, err := parserBuilderForTarget(*targetFlag)
 	if err != nil {
 		argError(1, "%v", err)
+	}
+	if *haxeUseHxUnicode {
+		switch strings.ToLower(strings.TrimSpace(*targetFlag)) {
+		case "hx", "haxe":
+		default:
+			argError(1, "-haxe-use-hxunicode requires the Haxe target")
+		}
 	}
 
 	// get input source
@@ -172,11 +180,12 @@ func main() {
 		runFuncPrefix := builderGo.RunFuncPrefix(*runFuncPrefixFlag)
 		grammarOnly := builderGo.GrammarOnly(*grammarOnlyFlag)
 		grammarName := builderGo.GrammarName(*grammarNameFlag)
+		hxUnicode := builderHx.UseHxUnicode(*haxeUseHxUnicode)
 
 		if err := buildParser(
 			outBuf, grammar, curNmOpt, optimizeParser,
 			runFuncPrefix, grammarOnly, grammarName,
-			nolintOpt, refExprByIndex); err != nil {
+			nolintOpt, refExprByIndex, hxUnicode); err != nil {
 			fmt.Fprintln(os.Stderr, "build error: ", err)
 			exit(5)
 		}
@@ -279,6 +288,9 @@ the generated code is written to this file instead.
 		generate grammar part only, used for multiple peg files.
 	-grammar-name
 		to set variable name of grammar, default is g, "var g = &grammar{ ... }"
+	-haxe-use-hxunicode
+		reference the hxUnicode haxelib instead of embedding Unicode tables
+		in generated Haxe parsers.
 	-run-func-prefix
 		set prefix for generated function name: "(*parser).call_onXXX". For multiple peg files
 	-t TARGET, -target TARGET

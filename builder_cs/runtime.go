@@ -544,7 +544,7 @@ private Match ParseLiteral(Expr expr)
 
 private Match ParseOneOrMore(Expr expr)
 {
-    var values = new List<object?>();
+    List<object?>? values = null;
     var matched = false;
     while (true)
     {
@@ -552,7 +552,7 @@ private Match ParseOneOrMore(Expr expr)
         var result = ParseExpr(expr.Inner!);
         if (!result.Ok)
         {
-            return new Match(values.Count == 0 ? null : values, matched);
+            return new Match(values, matched);
         }
         if (pt.Offset == before)
         {
@@ -561,21 +561,21 @@ private Match ParseOneOrMore(Expr expr)
         matched = true;
         if (result.Value != null)
         {
-            values.Add(result.Value);
+            (values ??= new List<object?>()).Add(result.Value);
         }
     }
 }
 
 private Match ParseZeroOrMore(Expr expr)
 {
-    var values = new List<object?>();
+    List<object?>? values = null;
     while (true)
     {
         var before = pt.Offset;
         var result = ParseExpr(expr.Inner!);
         if (!result.Ok)
         {
-            return new Match(values.Count == 0 ? null : values, true);
+            return new Match(values, true);
         }
         if (pt.Offset == before)
         {
@@ -583,7 +583,7 @@ private Match ParseZeroOrMore(Expr expr)
         }
         if (result.Value != null)
         {
-            values.Add(result.Value);
+            (values ??= new List<object?>()).Add(result.Value);
         }
     }
 }
@@ -597,7 +597,6 @@ private Match ParseZeroOrOne(Expr expr)
 private Match ParseSequence(Expr expr)
 {
     var start = pt;
-    var values = new List<object?>();
     foreach (var item in expr.Items!)
     {
         var result = ParseExpr(item);
@@ -606,12 +605,8 @@ private Match ParseSequence(Expr expr)
             Restore(start);
             return new Match(null, false);
         }
-        if (!Skipping() && result.Value != null)
-        {
-            values.Add(result.Value);
-        }
     }
-    return new Match(values.Count == 0 ? null : values, true);
+    return new Match(null, true);
 }
 
 private Match ParseRuleRef(Expr expr)

@@ -35,6 +35,7 @@ func TestMain(t *testing.T) {
 		{args: []string{"-x"}, code: 3},             // stdin: no match found
 		{args: []string{"-t", "hx", "-x", grammarFile}},
 		{args: []string{"-target", "hx", "-x", grammarFile}},
+		{args: []string{"-target", "hx", "-haxe-use-hxunicode", "-x", grammarFile}},
 		{args: []string{"-t", "ts", "-x", grammarFile}},
 		{args: []string{"-t", "cs", "-x", grammarFile}},
 		{args: []string{"-t", "rust", "-x", grammarFile}},
@@ -74,8 +75,10 @@ func TestParserBuilderForTarget(t *testing.T) {
 }
 
 func TestUsageIncludesTargetFlagAliases(t *testing.T) {
-	if want := "-t TARGET, -target TARGET"; !strings.Contains(usagePage, want) {
-		t.Fatalf("usage page missing %q", want)
+	for _, want := range []string{"-t TARGET, -target TARGET", "-haxe-use-hxunicode"} {
+		if !strings.Contains(usagePage, want) {
+			t.Fatalf("usage page missing %q", want)
+		}
 	}
 }
 

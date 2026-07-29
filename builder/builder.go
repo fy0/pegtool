@@ -175,6 +175,8 @@ type Builder struct {
 	GrammarName string
 	GrammarOnly bool
 
+	HaxeUseHxUnicode bool
+
 	RuleName2Index map[string]*ExprInfo
 
 	Shims       OverrideShims
