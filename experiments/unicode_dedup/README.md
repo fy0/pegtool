@@ -1,7 +1,9 @@
 # Unicode Range Size Experiment and Decision
 
-Status: final design selected after comparing shared tables, matcher pooling, and
-generic expression pooling.
+Status: historical design record for the matcher-local flat-table decision.
+The follow-up [runtime performance experiment](runtime-performance.md)
+supersedes the single linear table with matcher-local per-class tables and
+binary lookup, without introducing pooling or generated identifiers.
 
 Baseline commit: `c09ac57`
 Working branch: `hx`

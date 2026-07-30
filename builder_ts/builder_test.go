@@ -7,16 +7,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/fy0/pigeon/ast"
 	"github.com/fy0/pigeon/bootstrap"
+	base "github.com/fy0/pigeon/builder"
 )
 
 func TestUnicodeClassRangesAreFlatInlineAndDeterministic(t *testing.T) {
 	grammar := `
-start = letterA / letterB
+start = letterA / letterB / letterC
 letterA = [\p{L}]
 letterB = [x\p{L}]
+letterC = [\p{L}\p{Mn}]
 `
 	var first bytes.Buffer
 	if err := BuildParser(&first, parseGrammar(t, grammar)); err != nil {
@@ -31,17 +34,21 @@ letterB = [x\p{L}]
 	}
 
 	generated := first.String()
-	if count := strings.Count(generated, "classes: ["); count != 2 {
-		t.Fatalf("got %d inline Unicode tables, want 2", count)
+	if count := strings.Count(generated, "classes: [["); count != 3 {
+		t.Fatalf("got %d matcher-local Unicode table groups, want 3", count)
 	}
-	if count := strings.Count(generated, "65,90,1,"); count != 2 {
+	if count := strings.Count(generated, "65,90,1,"); count != 3 {
 		t.Fatalf("got %d copies of the first L range, want one per matcher", count)
+	}
+	if !strings.Contains(generated, "], [768,879,1,") {
+		t.Fatal("a multi-class matcher does not contain separate local tables")
 	}
 	if strings.Contains(generated, "classes: [\n") {
 		t.Fatal("generated Unicode tables contain per-range line overhead")
 	}
 	for _, fragment := range []string{
 		"const unicodeClass",
+		"inflateUnicodeTable",
 		"{ lo:",
 		"hi:",
 		"stride:",
@@ -50,6 +57,57 @@ letterB = [x\p{L}]
 			t.Fatalf("generated parser contains pooled/object range fragment %q", fragment)
 		}
 	}
+	for _, fragment := range []string{
+		"let high = table.length / 3 - 1;",
+		"const middle = (low + high) >>> 1;",
+	} {
+		if !strings.Contains(generated, fragment) {
+			t.Fatalf("generated parser does not contain binary lookup fragment %q", fragment)
+		}
+	}
+}
+
+func TestUnicodeClassBinarySearchMatchesGo(t *testing.T) {
+	for _, name := range []string{"L", "Lu", "Mn", "Other_ID_Start", "White_Space", "Han"} {
+		table := unicode.Categories[name]
+		if table == nil {
+			table = unicode.Properties[name]
+		}
+		if table == nil {
+			table = unicode.Scripts[name]
+		}
+		if table == nil {
+			t.Fatalf("unknown Unicode class %q", name)
+		}
+
+		ranges, err := base.UnicodeRanges([]string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for current := rune(0); current <= unicode.MaxRune; current++ {
+			got := unicodeRangesContain(ranges, current)
+			want := unicode.Is(table, current)
+			if got != want {
+				t.Fatalf("class %s at U+%04X: got %v, want %v", name, current, got, want)
+			}
+		}
+	}
+}
+
+func unicodeRangesContain(ranges []base.UnicodeRange, current rune) bool {
+	low, high := 0, len(ranges)-1
+	for low <= high {
+		middle := (low + high) / 2
+		item := ranges[middle]
+		if current < item.Lo {
+			high = middle - 1
+		} else if current > item.Hi {
+			low = middle + 1
+		} else {
+			return (current-item.Lo)%item.Stride == 0
+		}
+	}
+	return false
 }
 
 func TestGeneratedParserCompilesAndRuns(t *testing.T) {

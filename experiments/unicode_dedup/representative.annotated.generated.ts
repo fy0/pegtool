@@ -18,8 +18,8 @@ export const g: Grammar = {
       name: "repeatedA",
       expr: charClassMatcher({
         val: "[\\p{ASCII_Hex_Digit}]",
-        // Flat entries are lo, hi, stride triples from Go's unicode.RangeTable.
-        classes: [48,57,1, 65,70,1, 97,102,1,],
+        // Each local class table contains sorted lo, hi, stride triples.
+        classes: [[48,57,1, 65,70,1, 97,102,1,],],
       }),
     },
     {
@@ -27,16 +27,16 @@ export const g: Grammar = {
       expr: charClassMatcher({
         val: "[x\\p{ASCII_Hex_Digit}]",
         chars: [120,],
-        // This matcher owns its copy, keeping a grammar edit local in the diff.
-        classes: [48,57,1, 65,70,1, 97,102,1,],
+        // This matcher owns its copy, keeping grammar edits local in the diff.
+        classes: [[48,57,1, 65,70,1, 97,102,1,],],
       }),
     },
     {
       name: "mixed",
       expr: charClassMatcher({
         val: "[\\p{ASCII_Hex_Digit}\\p{White_Space}]",
-        // Multiple Unicode classes are concatenated in this matcher's one table.
-        classes: [48,57,1, 65,70,1, 97,102,1, 9,13,1, 32,133,101, 160,5760,5600, 8192,8202,1, 8232,8233,1, 8239,8287,48, 12288,12288,1,],
+        // Multiple classes stay separate so each sorted table can use binary lookup.
+        classes: [[48,57,1, 65,70,1, 97,102,1,], [9,13,1, 32,133,101, 160,5760,5600, 8192,8202,1, 8232,8233,1, 8239,8287,48, 12288,12288,1,],],
       }),
     },
   ],
@@ -88,7 +88,7 @@ interface Expr {
   want?: string;
   chars?: number[];
   ranges?: number[];
-  classes?: UnicodeTable;
+  classes?: readonly UnicodeTable[];
   ignoreCase?: boolean;
   inverted?: boolean;
   notSkip?: boolean;
@@ -397,14 +397,26 @@ export class Parser {
       }
     }
     if (!found && expr.classes !== undefined) {
-      for (let index = 0; index < expr.classes.length; index += 3) {
-        const lo = expr.classes[index];
-        const hi = expr.classes[index + 1];
-        const stride = expr.classes[index + 2];
-        if (current >= lo && current <= hi && (current - lo) % stride === 0) {
-          found = true;
-          break;
+      for (const table of expr.classes) {
+        // Go RangeTable entries are sorted and non-overlapping.
+        let low = 0;
+        let high = table.length / 3 - 1;
+        while (low <= high) {
+          const middle = (low + high) >>> 1;
+          const index = middle * 3;
+          const lo = table[index];
+          const hi = table[index + 1];
+          if (current < lo) {
+            high = middle - 1;
+          } else if (current > hi) {
+            low = middle + 1;
+          } else {
+            const stride = table[index + 2];
+            found = (current - lo) % stride === 0;
+            break;
+          }
         }
+        if (found) break;
       }
     }
 

@@ -223,17 +223,21 @@ func writeCharClassMatcher(b *base.Builder, expr *ast.CharClassMatcher) {
 			})
 		}
 		if len(expr.UnicodeClasses) > 0 {
-			ranges, err := base.UnicodeRanges(expr.UnicodeClasses)
-			if err != nil {
-				b.Err = err
-				return
-			}
 			b.WriteFieldf("classes: ")
-			b.WriteArray("number", false, func() {
+			b.Writef("[")
+			for _, name := range expr.UnicodeClasses {
+				ranges, err := base.UnicodeRanges([]string{name})
+				if err != nil {
+					b.Err = err
+					return
+				}
+				b.WriteItemf("[")
 				for _, item := range ranges {
 					b.WriteItemf("%d,%d,%d,", item.Lo, item.Hi, item.Stride)
 				}
-			})
+				b.Writef("],")
+			}
+			b.Writeln("],")
 		}
 		if expr.IgnoreCase {
 			b.WritelnFieldf("ignoreCase: true,")
