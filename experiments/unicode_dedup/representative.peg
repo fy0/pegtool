@@ -1,0 +1,4 @@
+start = repeatedA / repeatedB / mixed
+repeatedA = [\p{ASCII_Hex_Digit}]
+repeatedB = [x\p{ASCII_Hex_Digit}]
+mixed = [\p{ASCII_Hex_Digit}\p{White_Space}]

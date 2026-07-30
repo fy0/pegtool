@@ -29,11 +29,7 @@ interface Rule {
   pos?: Position;
 }
 
-interface UnicodeRange {
-  lo: number;
-  hi: number;
-  stride: number;
-}
+type UnicodeTable = readonly number[];
 
 interface Expr {
   kind: string;
@@ -51,7 +47,7 @@ interface Expr {
   want?: string;
   chars?: number[];
   ranges?: number[];
-  classes?: UnicodeRange[];
+  classes?: UnicodeTable;
   ignoreCase?: boolean;
   inverted?: boolean;
   notSkip?: boolean;
@@ -360,10 +356,15 @@ export class Parser {
       }
     }
     if (!found && expr.classes !== undefined) {
-      found = expr.classes.some((range) =>
-        current !== null && current >= range.lo && current <= range.hi &&
-        (current - range.lo) % range.stride === 0,
-      );
+      for (let index = 0; index < expr.classes.length; index += 3) {
+        const lo = expr.classes[index];
+        const hi = expr.classes[index + 1];
+        const stride = expr.classes[index + 2];
+        if (current >= lo && current <= hi && (current - lo) % stride === 0) {
+          found = true;
+          break;
+        }
+      }
     }
 
     const matched = expr.inverted ? !found : found;

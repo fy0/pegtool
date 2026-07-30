@@ -229,9 +229,9 @@ func writeCharClassMatcher(b *base.Builder, expr *ast.CharClassMatcher) {
 				return
 			}
 			b.WriteFieldf("classes: ")
-			b.WriteArray("UnicodeRange", true, func() {
+			b.WriteArray("number", false, func() {
 				for _, item := range ranges {
-					b.WritelnItemf("{ lo: %d, hi: %d, stride: %d },", item.Lo, item.Hi, item.Stride)
+					b.WriteItemf("%d,%d,%d,", item.Lo, item.Hi, item.Stride)
 				}
 			})
 		}
