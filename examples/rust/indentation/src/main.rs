@@ -9,7 +9,7 @@ fn run(input: &str) -> Result<i64, String> {
 
 fn main() {
     let path = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("usage: pigeon-indentation-example FILE");
+        eprintln!("usage: pegtool-indentation-example FILE");
         std::process::exit(2);
     });
     let input = std::fs::read_to_string(path).unwrap_or_else(|error| {

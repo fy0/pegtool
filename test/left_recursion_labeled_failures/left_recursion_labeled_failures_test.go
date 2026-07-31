@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	leftrecursionlabeledfailures "github.com/fy0/pigeon/test/left_recursion_labeled_failures"
+	leftrecursionlabeledfailures "github.com/fy0/pegtool/test/left_recursion_labeled_failures"
 )
 
 func TestLeftRecursionWithLabeledFailures(t *testing.T) {

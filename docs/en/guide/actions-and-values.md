@@ -1,6 +1,6 @@
 # Actions and Values
 
-Pegtool gives matched text, semantic values, and host-language actions distinct roles. A grammar no longer creates a value array for every sequence, so any required data must be captured or returned explicitly.
+pegtool gives matched text, semantic values, and host-language actions distinct roles. A grammar no longer creates a value array for every sequence, so any required data must be captured or returned explicitly.
 
 ## Value propagation
 
@@ -85,10 +85,10 @@ Do not use the `return value, err` form from other Pigeon versions.
 | Haxe | `Any` | `c.text`, `c.data` |
 | TypeScript | `any` | `c.text`, `c.data` |
 | C# | `object?` | `c.Text`, `c.Data` |
-| C99 | Owned `PigeonValue` model | `PigeonCurrent *c` |
+| C99 | Owned `PegtoolValue` model | `PegtoolCurrent *c` |
 | Rust | `Value` enum | `current.text` and custom data |
 
-C99 actions return an owned `PigeonValue`; Rust actions use a cloneable `Value` enum. See each [target language](/en/targets/) page for exact usage.
+C99 actions return an owned `PegtoolValue`; Rust actions use a cloneable `Value` enum. See each [target language](/en/targets/) page for exact usage.
 
 ## Actions inside lookahead
 

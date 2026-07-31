@@ -124,7 +124,7 @@ Probe   = *{ c.data.ProbeCount++ }
 
 ## 左递归
 
-当前 Pegtool builder 会拒绝左递归：
+当前 pegtool builder 会拒绝左递归：
 
 ```peg
 // 不支持

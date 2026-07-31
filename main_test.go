@@ -45,7 +45,7 @@ func TestMain(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		os.Args = append([]string{"pigeon"}, tc.args...)
+		os.Args = append([]string{"pegtool"}, tc.args...)
 
 		got := runMainRecover()
 		if got != tc.code {

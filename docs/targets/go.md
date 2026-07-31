@@ -4,7 +4,7 @@ Go 是默认 target。生成器会运行 goimports 格式化输出，initializer
 
 ## 最小可运行示例
 
-在空目录中手写下面两个文件。`parser.go` 由 Pegtool 生成，不需要手工创建。
+在空目录中手写下面两个文件。`parser.go` 由 pegtool 生成，不需要手工创建。
 
 ### `identifier.peg`
 

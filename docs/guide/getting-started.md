@@ -1,13 +1,13 @@
 # 快速开始
 
-Pegtool 使用 Go 编写。下面统一使用命令名 `pegtool`。
+pegtool 使用 Go 编写。下面统一使用命令名 `pegtool`。
 
 ## 安装
 
 从 Go 模块安装最新版本：
 
 ```powershell
-go install github.com/fy0/pigeon@latest
+go install github.com/fy0/pegtool@latest
 pegtool -h
 ```
 

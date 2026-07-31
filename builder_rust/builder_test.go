@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fy0/pigeon/bootstrap"
+	"github.com/fy0/pegtool/bootstrap"
 )
 
 func TestGeneratedParserCompilesAndRuns(t *testing.T) {
@@ -46,7 +46,7 @@ word = [\p{L}]+ { return Value::String(c.text.clone()); }
 	}
 	generated.WriteString(`
 fn main() {
-    match PigeonParser::parse("alpha,\u{4e16}\u{754c}") {
+    match PTParser::parse("alpha,\u{4e16}\u{754c}") {
         Ok(Value::String(value)) if value == "alpha|\u{4e16}\u{754c}" => println!("{}", value),
         Ok(value) => panic!("unexpected parse result: {:?}", value),
         Err(error) => panic!("parse failed: {}", error),

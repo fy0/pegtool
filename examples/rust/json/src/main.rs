@@ -1,9 +1,9 @@
 mod parser;
 
-use parser::{PigeonParser, Value};
+use parser::{PTParser, Value};
 
 fn parse_json(input: &str) -> Result<Value, String> {
-    PigeonParser::parse(input).map_err(|error| error.to_string())
+    PTParser::parse(input).map_err(|error| error.to_string())
 }
 
 fn main() {

@@ -1,6 +1,6 @@
 # Choosing Performance Options
 
-Choose performance options according to grammar behavior instead of enabling them all. Pegtool's three most important tradeoffs are a fixed optimized runtime, named-rule memoization, and indexed rule references. They solve different problems and carry different maintenance costs.
+Choose performance options according to grammar behavior instead of enabling them all. pegtool's three most important tradeoffs are a fixed optimized runtime, named-rule memoization, and indexed rule references. They solve different problems and carry different maintenance costs.
 
 ## Recommended starting points
 
@@ -133,7 +133,7 @@ This avoids a name-map lookup, but the number depends directly on rule order. In
 - Multiple contributors frequently insert or reorder rules.
 - Generated parsers require sustained auditing.
 
-The historical estimate of roughly `10%` was an overall figure, not a current guarantee for Go, Haxe, or TypeScript. The current cross-target tests did not isolate this option either, so Pegtool does not document it as a default.
+The historical estimate of roughly `10%` was an overall figure, not a current guarantee for Go, Haxe, or TypeScript. The current cross-target tests did not isolate this option either, so pegtool does not document it as a default.
 
 For maximum throughput, append this only after establishing a stable configuration:
 
@@ -145,7 +145,7 @@ For maximum throughput, append this only after establishing a stable configurati
 
 ### `-cache`
 
-This caches only the process by which **Pegtool reads a `.peg` grammar**. It does not change the generated file or enable memoization in the generated parser. Test it only when the generator is unusually slow at parsing a pathological grammar; ordinary grammars may become slower and consume more memory.
+This caches only the process by which **pegtool reads a `.peg` grammar**. It does not change the generated file or enable memoization in the generated parser. Test it only when the generator is unusually slow at parsing a pathological grammar; ordinary grammars may become slower and consume more memory.
 
 ### `-nolint`
 

@@ -1,12 +1,12 @@
 # Development
 
-This page is for contributors modifying the Pegtool generator itself. Projects that only use generated parsers do not need these steps.
+This page is for contributors modifying the pegtool generator itself. Projects that only use generated parsers do not need these steps.
 
 ## Repository structure
 
 | Path | Contents |
 | --- | --- |
-| `grammar/` | Pegtool's own PEG grammar |
+| `grammar/` | pegtool's own PEG grammar |
 | `ast/` | Grammar AST and traversal |
 | `builder/` | Shared builder and Go runtime |
 | `builder_hx/` | Haxe target |

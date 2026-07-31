@@ -1,5 +1,5 @@
 // Command bootstrap-pigeon generates a PEG parser from a PEG grammar
-// to bootstrap the pigeon command-line tool, as it is built using
+// to bootstrap the pegtool command-line tool, as it is built using
 // a simplified bootstrapping grammar that understands just enough of the
 // pigeon grammar to parse it and build the tool.
 package main
@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/tools/imports"
 
-	"github.com/fy0/pigeon/ast"
-	"github.com/fy0/pigeon/builder"
+	"github.com/fy0/pegtool/ast"
+	"github.com/fy0/pegtool/builder"
 )
 
 func main() {

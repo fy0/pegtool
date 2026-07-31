@@ -3,17 +3,17 @@
 version = 4
 
 [[package]]
-name = "pigeon-calculator-example"
+name = "pegtool-calculator-example"
 version = "0.1.0"
 
 [[package]]
-name = "pigeon-indentation-example"
+name = "pegtool-indentation-example"
 version = "0.1.0"
 
 [[package]]
-name = "pigeon-json-example"
+name = "pegtool-json-example"
 version = "0.1.0"
 
 [[package]]
-name = "pigeon-predicate-code-example"
+name = "pegtool-predicate-code-example"
 version = "0.1.0"

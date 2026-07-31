@@ -8,45 +8,45 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fy0/pigeon/bootstrap"
-	base "github.com/fy0/pigeon/builder"
+	"github.com/fy0/pegtool/bootstrap"
+	base "github.com/fy0/pegtool/builder"
 )
 
 func TestGeneratedParserCompilesAsC99AndRuns(t *testing.T) {
 	compilers := requireCCompilers(t)
 	grammar := `{
 {{ if eq .Target "c" }}
-#define PIGEON_TARGET_C99 1
+#define PEGTOOL_TARGET_C99 1
 {{ else }}
 #error incorrect target template value
 {{ end }}
 
-static PigeonValue join_words(const PigeonValue *first, const PigeonValue *rest) {
-    const PigeonValue *last;
+static PegtoolValue join_words(const PegtoolValue *first, const PegtoolValue *rest) {
+    const PegtoolValue *last;
     char *text;
     size_t length;
-    PigeonValue result;
-    if (first == NULL || first->type != PIGEON_VALUE_STRING ||
-        rest == NULL || rest->type != PIGEON_VALUE_ARRAY || rest->as.array.length != 1 ||
-        rest->as.array.items[0].type != PIGEON_VALUE_ARRAY ||
+    PegtoolValue result;
+    if (first == NULL || first->type != PEGTOOL_VALUE_STRING ||
+        rest == NULL || rest->type != PEGTOOL_VALUE_ARRAY || rest->as.array.length != 1 ||
+        rest->as.array.items[0].type != PEGTOOL_VALUE_ARRAY ||
         rest->as.array.items[0].as.array.length != 1) {
-        return pigeon_value_null();
+        return pegtool_value_null();
     }
     last = &rest->as.array.items[0].as.array.items[0];
-    if (last->type != PIGEON_VALUE_STRING) return pigeon_value_null();
+    if (last->type != PEGTOOL_VALUE_STRING) return pegtool_value_null();
     length = first->as.string.length + 1 + last->as.string.length;
     text = (char *)malloc(length);
-    if (text == NULL) return pigeon_value_null();
+    if (text == NULL) return pegtool_value_null();
     memcpy(text, first->as.string.data, first->as.string.length);
     text[first->as.string.length] = '|';
     memcpy(text + first->as.string.length + 1, last->as.string.data, last->as.string.length);
-    result = pigeon_value_string_n(text, length);
+    result = pegtool_value_string_n(text, length);
     free(text);
     return result;
 }
 }
 start = first:word rest:("," word)* !. { return join_words(first, rest); }
-word = [\p{L}]+ { return pigeon_value_string_n(c->text, c->text_length); }
+word = [\p{L}]+ { return pegtool_value_string_n(c->text, c->text_length); }
 unicodeLetter = [\p{L}] !.
 foldedRange = [a-f]i !.
 foldedLiteral = "ä"i !.
@@ -67,47 +67,47 @@ eofFailure = "a" !.
 	}
 	generated.WriteString(`
 static int expect_entrypoint(const char *entrypoint, const char *input) {
-    PigeonParserOptions options;
-    PigeonResult result;
+    PegtoolParserOptions options;
+    PegtoolResult result;
     memset(&options, 0, sizeof(options));
     options.entrypoint = entrypoint;
-    result = pigeon_parse_with_options(input, &options);
+    result = pegtool_parse_with_options(input, &options);
     if (!result.ok) {
         fprintf(stderr, "%s failed: %s\n", entrypoint, result.error == NULL ? "unknown" : result.error);
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 0;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     return 1;
 }
 
 static int expect_failure(const char *entrypoint, const char *input, const char *expected) {
-    PigeonParserOptions options;
-    PigeonResult result;
+    PegtoolParserOptions options;
+    PegtoolResult result;
     memset(&options, 0, sizeof(options));
     options.entrypoint = entrypoint;
-    result = pigeon_parse_with_options(input, &options);
+    result = pegtool_parse_with_options(input, &options);
     if (result.ok || result.error == NULL || strstr(result.error, expected) == NULL) {
         fprintf(stderr, "%s returned an unexpected error: %s\n",
                 entrypoint, result.error == NULL ? "none" : result.error);
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 0;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     return 1;
 }
 
 int main(void) {
     const char nul_input[] = { 0 };
-    PigeonParserOptions options;
-    PigeonResult result = pigeon_parse("alpha,\344\270\226\347\225\214");
-    if (!result.ok || result.value.type != PIGEON_VALUE_STRING ||
+    PegtoolParserOptions options;
+    PegtoolResult result = pegtool_parse("alpha,\344\270\226\347\225\214");
+    if (!result.ok || result.value.type != PEGTOOL_VALUE_STRING ||
         strcmp(result.value.as.string.data, "alpha|\344\270\226\347\225\214") != 0) {
         fprintf(stderr, "unexpected parse result: %s\n", result.error == NULL ? "value" : result.error);
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 1;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     if (!expect_entrypoint("unicodeLetter", "\360\220\220\200") ||
         !expect_entrypoint("foldedRange", "F") ||
         !expect_entrypoint("foldedLiteral", "\303\204")) {
@@ -115,22 +115,22 @@ int main(void) {
     }
     memset(&options, 0, sizeof(options));
     options.entrypoint = "nulByte";
-    result = pigeon_parse_with_options_n(nul_input, sizeof(nul_input), &options);
+    result = pegtool_parse_with_options_n(nul_input, sizeof(nul_input), &options);
     if (!result.ok) {
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 3;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     if (!expect_failure("expectedFailure", "c", "\"b\"") ||
         !expect_failure("eofFailure", "ab", "EOF")) {
         return 4;
     }
-    result = pigeon_parse_with_options("7", &(PigeonParserOptions){ .entrypoint = "unicodeLetter" });
+    result = pegtool_parse_with_options("7", &(PegtoolParserOptions){ .entrypoint = "unicodeLetter" });
     if (result.ok || result.error == NULL || result.position.line != 1 || result.position.col != 1) {
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 5;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     puts("c99-ok");
     return 0;
 }
@@ -173,7 +173,7 @@ func TestExtendedExpressionsCompileAsC99AndRun(t *testing.T) {
 	}
 	cmd := exec.Command(goTool, "run", "..", "-t", "c", "-optimize-ref-expr-by-index", "-o", source, grammar)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("pigeon C target failed: %v\n%s", err, output)
+		t.Fatalf("pegtool C target failed: %v\n%s", err, output)
 	}
 	generated, err := os.ReadFile(source)
 	if err != nil {
@@ -181,18 +181,18 @@ func TestExtendedExpressionsCompileAsC99AndRun(t *testing.T) {
 	}
 	generated = append(generated, []byte(`
 static int parse_entrypoint(const char *entrypoint, const char *input, int want_string) {
-    PigeonParserOptions options;
-    PigeonResult result;
+    PegtoolParserOptions options;
+    PegtoolResult result;
     memset(&options, 0, sizeof(options));
     options.entrypoint = entrypoint;
-    result = pigeon_parse_with_options(input, &options);
+    result = pegtool_parse_with_options(input, &options);
     if (!result.ok || (want_string &&
-        (result.value.type != PIGEON_VALUE_STRING || strcmp(result.value.as.string.data, "x") != 0))) {
+        (result.value.type != PEGTOOL_VALUE_STRING || strcmp(result.value.as.string.data, "x") != 0))) {
         fprintf(stderr, "%s failed: %s\n", entrypoint, result.error == NULL ? "value" : result.error);
-        pigeon_result_free(&result);
+        pegtool_result_free(&result);
         return 0;
     }
-    pigeon_result_free(&result);
+    pegtool_result_free(&result);
     return 1;
 }
 
@@ -236,7 +236,7 @@ func TestReceiverName(t *testing.T) {
 	p := bootstrap.NewParser()
 	g, err := p.Parse(
 		"grammar.peg",
-		strings.NewReader(`start = "x" { return pigeon_value_string_n(ctx->text, ctx->text_length); }`),
+		strings.NewReader(`start = "x" { return pegtool_value_string_n(ctx->text, ctx->text_length); }`),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestReceiverName(t *testing.T) {
 	if err := BuildParser(&generated, g, base.ReceiverName("ctx")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(generated.String(), "PigeonCurrent *ctx = &p->cur;") {
+	if !strings.Contains(generated.String(), "PegtoolCurrent *ctx = &p->cur;") {
 		t.Fatal("generated action does not use the configured receiver name")
 	}
 	if err := BuildParser(&bytes.Buffer{}, g, base.ReceiverName("for")); err == nil {

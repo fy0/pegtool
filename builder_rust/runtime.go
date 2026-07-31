@@ -126,8 +126,8 @@ impl fmt::Display for ParseError {
 
 impl Error for ParseError {}
 
-type ActionFn = fn(&mut PigeonParser) -> Value;
-type PredicateFn = fn(&mut PigeonParser) -> bool;
+type ActionFn = fn(&mut PTParser) -> Value;
+type PredicateFn = fn(&mut PTParser) -> bool;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ExprKind {
@@ -358,7 +358,7 @@ impl Match {
     fn new(value: Value, ok: bool) -> Self { Self { value, ok } }
 }
 
-pub struct PigeonParser {
+pub struct PTParser {
     filename: String,
     input: String,
     entrypoint: String,
@@ -378,7 +378,7 @@ pub struct PigeonParser {
     vstack: Vec<HashMap<String, Value>>,
 }
 
-impl PigeonParser {
+impl PTParser {
     pub fn parse(input: &str) -> Result<Value, ParseError> {
         Self::parse_with_options(input, ParserOptions::default())
     }

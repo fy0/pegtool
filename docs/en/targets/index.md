@@ -1,6 +1,6 @@
 # Target Overview
 
-Pegtool uses one shared set of PEG structural semantics, while the initializer, actions, predicates, and public invocation belong to the target language. Choose the deployment target before writing host-language code.
+pegtool uses one shared set of PEG structural semantics, while the initializer, actions, predicates, and public invocation belong to the target language. Choose the deployment target before writing host-language code.
 
 ## Support matrix
 
@@ -9,9 +9,9 @@ Pegtool uses one shared set of PEG structural semantics, while the initializer, 
 | Go | `go` | Initializer wraps package-private `parse` | `any` | Supported |
 | Haxe | `hx`, `haxe` | `new Parser(...).parse(...)` | `Any` | Supported, but mutually exclusive with `-optimize-parser` |
 | TypeScript | `ts`, `typescript` | `parse`, `Parser` | `any` | Not supported |
-| C# | `cs`, `csharp`, `c#` | `PigeonParser.Parse` | `object?` | Not supported |
-| C99 | `c`, `c99` | `pigeon_parse*` | `PigeonValue` | Not supported |
-| Rust | `rust` | `PigeonParser::parse*` | `Value` | Not supported |
+| C# | `cs`, `csharp`, `c#` | `PTParser.Parse` | `object?` | Not supported |
+| C99 | `c`, `c99` | `pegtool_parse*` | `PegtoolValue` | Not supported |
+| Rust | `rust` | `PTParser::parse*` | `Value` | Not supported |
 
 Each complete generated parser depends only on the target language's standard library by default. Haxe requires `hxUnicode` only when `-haxe-use-hxunicode` is explicitly selected and the grammar contains Unicode classes.
 

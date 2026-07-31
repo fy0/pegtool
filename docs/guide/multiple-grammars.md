@@ -1,6 +1,6 @@
 # 多文件与入口规则
 
-Pegtool 可以让一个 Go parser runtime 承载多份文法。当前经过明确设计和测试的是同一 Go package 内的 `grammar-only` 工作流；其他 target 暂不建议依赖这一能力。
+pegtool 可以让一个 Go parser runtime 承载多份文法。当前经过明确设计和测试的是同一 Go package 内的 `grammar-only` 工作流；其他 target 暂不建议依赖这一能力。
 
 ## 生成主文法
 

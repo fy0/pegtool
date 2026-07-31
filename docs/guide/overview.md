@@ -1,8 +1,8 @@
 # 项目概览
 
-Pegtool 是一个使用 Go 编写的 PEG（Parsing Expression Grammar）解析器生成器。它读取 `.peg` 文法，在构建阶段生成目标语言源码；部署生成的 parser 时不需要携带 Pegtool 本身。
+pegtool 是一个使用 Go 编写的 PEG（Parsing Expression Grammar）解析器生成器。它读取 `.peg` 文法，在构建阶段生成目标语言源码；部署生成的 parser 时不需要携带 pegtool 本身。
 
-项目于 2024 年从 Pigeon 分叉，分叉基线包含 Pigeon 2023 年的 `v1.2.x` 发布线。两者的 PEG 写法总体相似，但 Pegtool 的文法、值语义、生成 API 和运行时已经独立演进。这个 fork 的首要原因是性能，此后围绕生成物的执行效率进行了大量优化；为了消除隐式值数组、状态复制和动态查找等成本，部分优化不得不调整文法和值语义。最初的分析和测量记录在 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
+项目于 2024 年从 Pigeon 分叉，分叉基线包含 Pigeon 2023 年的 `v1.2.x` 发布线。两者的 PEG 写法总体相似，但 pegtool 的文法、值语义、生成 API 和运行时已经独立演进。这个 fork 的首要原因是性能，此后围绕生成物的执行效率进行了大量优化；为了消除隐式值数组、状态复制和动态查找等成本，部分优化不得不调整文法和值语义。最初的分析和测量记录在 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
 
 ## 为什么建立这个 fork
 
@@ -20,7 +20,7 @@ Go 生态中有多种 PEG parser 生成器。它们的生成方式和设计目�
 | --- | --- | --- |
 | [`pointlander/peg`](https://github.com/pointlander/peg) | 生成高度展开、包含大量 `goto` 的 Go parser，执行速度通常较好；文法改动可能产生大面积生成 diff | 吞吐优先，生成文件不需要长期审阅，文法结构相对稳定 |
 | [原版 Pigeon](https://github.com/mna/pigeon) | 生成结构直观，文法和 runtime 容易理解与扩展，保持上游语法和 API | 重视上游兼容性、可扩展性，且现有负载能够接受其性能 |
-| Pegtool | 保留可审阅的生成结构，优化 parser 热路径，并支持多个 target；部分值语义与原版 Pigeon 不同 | 需要稳定生成 diff、自定义 runtime 或诊断接口，或者需要生成多种目标语言 |
+| pegtool | 保留可审阅的生成结构，优化 parser 热路径，并支持多个 target；部分值语义与原版 Pigeon 不同 | 需要稳定生成 diff、自定义 runtime 或诊断接口，或者需要生成多种目标语言 |
 
 没有一种工具在所有文法上都更好。选型时应同时比较真实输入上的性能、错误诊断、生成 diff、目标语言，以及生成文件是否需要提交和审阅。
 
@@ -30,7 +30,7 @@ Go 生态中有多种 PEG parser 生成器。它们的生成方式和设计目�
 
 这次尝试仍然留下了项目最重要的结构变化之一：受 Haxe 多 target 思路启发，Pigeon builder 被扩展为可以选择目标语言，并加入了 Haxe target。项目随后用它实现过一套叙事语言脚本引擎，验证了同一 PEG 核心生成不同宿主语言 parser 的可行性。
 
-此后近两年，作者主要忙于其他工作，项目演进一度放缓。到 2026 年又补充了更多目标语言和相应 runtime，形成了现在支持 Go、Haxe、TypeScript、C#、C99 与 Rust 的 Pegtool。
+此后近两年，作者主要忙于其他工作，项目演进一度放缓。到 2026 年又补充了更多目标语言和相应 runtime，形成了现在支持 Go、Haxe、TypeScript、C#、C99 与 Rust 的 pegtool。
 
 ## 支持的目标语言
 

@@ -29,7 +29,7 @@ onMounted(() => {
 
 const prompt = computed(() =>
   isEnglish.value
-    ? `You are the code agent responsible for migrating a parser. Migrate the PEG grammar in the current repository from upstream Pigeon to Pegtool.
+    ? `You are the code agent responsible for migrating a parser. Migrate the PEG grammar in the current repository from upstream Pigeon to pegtool.
 
 Migration guide: ${migrationUrl.value}
 
@@ -47,7 +47,7 @@ Constraints:
 - Do not reduce Unicode character sets or modify unrelated parser algorithms.
 - Do not enable -optimize-ref-expr-by-index by default. Use it only when benchmarks confirm the benefit and a large generated diff is acceptable.
 - Choose memoization according to the target and workload; do not enable it mechanically.`
-    : `你是负责 parser 迁移的 code agent。请把当前仓库中基于原版 Pigeon 的 PEG 文法迁移到 Pegtool。
+    : `你是负责 parser 迁移的 code agent。请把当前仓库中基于原版 Pigeon 的 PEG 文法迁移到 pegtool。
 
 迁移规范：${migrationUrl.value}
 

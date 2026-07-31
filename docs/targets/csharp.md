@@ -1,6 +1,6 @@
 # C#
 
-C# target 生成一个独立的 `partial` `PigeonParser` 类，适合 .NET 8 及启用 nullable reference types 的项目。
+C# target 生成一个独立的 `partial` `PTParser` 类，适合 .NET 8 及启用 nullable reference types 的项目。
 
 ## 最小可运行示例
 
@@ -10,7 +10,7 @@ C# target 生成一个独立的 `partial` `PigeonParser` 类，适合 .NET 8 及
 dotnet new console --framework net8.0
 ```
 
-保留生成的项目文件，新建 `identifier.peg`，并用下面内容替换 `Program.cs`。`Parser.cs` 由 Pegtool 生成。
+保留生成的项目文件，新建 `identifier.peg`，并用下面内容替换 `Program.cs`。`Parser.cs` 由 pegtool 生成。
 
 ### `identifier.peg`
 
@@ -22,7 +22,7 @@ Identifier = [\pL_] [\pL\p{Nd}_]*
 ### `Program.cs`
 
 ```csharp
-var value = (string)PigeonParser.Parse("name_世界")!;
+var value = (string)PTParser.Parse("name_世界")!;
 Console.WriteLine(value);
 ```
 
@@ -41,10 +41,10 @@ name_世界
 
 ## 公开 API
 
-`PigeonParser.Parse` 返回 `object?`，失败时抛出包含 `Position` 和 `Expected` 的 `PigeonParseException`。完整 options 调用如下：
+`PTParser.Parse` 返回 `object?`，失败时抛出包含 `Position` 和 `Expected` 的 `PTParseException`。完整 options 调用如下：
 
 ```csharp
-var value = PigeonParser.Parse(source, new PigeonParser.ParserOptions
+var value = PTParser.Parse(source, new PTParser.ParserOptions
 {
     Filename = "input.txt",
     Entrypoint = "Start",
@@ -55,7 +55,7 @@ var value = PigeonParser.Parse(source, new PigeonParser.ParserOptions
 
 ## Initializer 与 action
 
-C# initializer 会放进生成的 `partial PigeonParser` 类内部，因此应声明嵌套类型、字段和 helper 方法，不要写 namespace 或顶层语句：
+C# initializer 会放进生成的 `partial PTParser` 类内部，因此应声明嵌套类型、字段和 helper 方法，不要写 namespace 或顶层语句：
 
 ```peg
 {

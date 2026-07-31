@@ -4,7 +4,7 @@ Haxe target 可以编译到 JavaScript、HashLink 和其他 Haxe 后端。本项
 
 ## 最小可运行示例
 
-在空目录中手写下面两个文件。`Parser.hx` 由 Pegtool 生成。
+在空目录中手写下面两个文件。`Parser.hx` 由 pegtool 生成。
 
 ### `identifier.peg`
 

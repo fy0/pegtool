@@ -1,9 +1,9 @@
 mod parser;
 
-use parser::{PigeonParser, Value};
+use parser::{PTParser, Value};
 
 fn parse_operator(input: &str) -> Result<String, String> {
-    match PigeonParser::parse(input).map_err(|error| error.to_string())? {
+    match PTParser::parse(input).map_err(|error| error.to_string())? {
         Value::String(value) => Ok(value),
         value => Err(format!("unexpected parser result: {value:?}")),
     }

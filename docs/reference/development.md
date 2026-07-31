@@ -1,12 +1,12 @@
 # 项目开发
 
-本页面向修改 Pegtool 生成器本身的贡献者。只使用生成 parser 的项目不需要这些步骤。
+本页面向修改 pegtool 生成器本身的贡献者。只使用生成 parser 的项目不需要这些步骤。
 
 ## 仓库结构
 
 | 路径 | 内容 |
 | --- | --- |
-| `grammar/` | Pegtool 自身 PEG 文法 |
+| `grammar/` | pegtool 自身 PEG 文法 |
 | `ast/` | 文法 AST 与遍历 |
 | `builder/` | 共享 builder 与 Go runtime |
 | `builder_hx/` | Haxe target |

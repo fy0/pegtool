@@ -1,9 +1,9 @@
-# Contributing to pigeon
+# Contributing to pegtool
 
 There are various ways to help support this open source project:
 
-* if you use pigeon and find it useful, talk about it - that's probably the most basic way to help any open-source project: getting the word out that it exists and that it can be useful
-* if you use pigeon and find bugs, please [file an issue][0]
+* if you use pegtool and find it useful, talk about it - that's probably the most basic way to help any open-source project: getting the word out that it exists and that it can be useful
+* if you use pegtool and find bugs, please [file an issue][0]
 * if something is poorly documented, or doesn't work as documented, this is also a bug, please [file an issue][0]
 * if you can fix the issue (whether it is documentation- or code-related), then [submit a pull-request][1] - but read on to see what should be done to get it merged
 * if you would like to see some new feature/behaviour being implemented, please first [open an issue][0] to discuss it because features are less likely to get merged compared to bug fixes
@@ -26,8 +26,8 @@ Once all code is done and tests pass, regenerate the whole tree with `make`, run
 
 ## Licensing
 
-All pull requests that get merged will be made available under the BSD 3-Clause license (see the LICENSE file for details), as the rest of the pigeon repository. Do not submit pull requests if you do not want your contributions to be made available under those terms.
+All pull requests that get merged will be made available under the BSD 3-Clause license (see the LICENSE file for details), as the rest of the pegtool repository. Do not submit pull requests if you do not want your contributions to be made available under those terms.
 
-[0]: https://github.com/mna/pigeon/issues/new
-[1]: https://github.com/mna/pigeon/pulls
+[0]: https://github.com/fy0/pegtool/issues/new
+[1]: https://github.com/fy0/pegtool/pulls
 [2]: https://github.com/golang/go/wiki/CodeReviewComments

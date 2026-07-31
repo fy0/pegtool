@@ -1,6 +1,6 @@
 # 动作与值
 
-Pegtool 让文本、语义值和宿主语言 action 分工明确。文法不再为每个 sequence 自动创建值数组，因此需要的数据必须显式捕获或返回。
+pegtool 让文本、语义值和宿主语言 action 分工明确。文法不再为每个 sequence 自动创建值数组，因此需要的数据必须显式捕获或返回。
 
 ## 值传播规则
 
@@ -85,10 +85,10 @@ Integer = [0-9]+ {
 | Haxe | `Any` | `c.text`、`c.data` |
 | TypeScript | `any` | `c.text`、`c.data` |
 | C# | `object?` | `c.Text`、`c.Data` |
-| C99 | `PigeonValue` 所有权模型 | `PigeonCurrent *c` |
+| C99 | `PegtoolValue` 所有权模型 | `PegtoolCurrent *c` |
 | Rust | `Value` 枚举 | `current.text` 与 custom data |
 
-C99 action 返回拥有所有权的 `PigeonValue`；Rust action 使用可克隆的 `Value` 枚举。具体调用方式见各[目标语言](/targets/)页面。
+C99 action 返回拥有所有权的 `PegtoolValue`；Rust action 使用可克隆的 `Value` 枚举。具体调用方式见各[目标语言](/targets/)页面。
 
 ## Lookahead 中的 action
 

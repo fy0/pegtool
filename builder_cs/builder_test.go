@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fy0/pigeon/bootstrap"
+	"github.com/fy0/pegtool/bootstrap"
 )
 
 func TestGeneratedParserCompilesAndRuns(t *testing.T) {
@@ -47,7 +47,7 @@ word = [\p{L}]+ { return c.Text; }
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "Parser.cs"), generated.Bytes())
 	writeTestFile(t, filepath.Join(dir, "Program.cs"), []byte(`
-var actual = PigeonParser.Parse("alpha,\u4e16\u754c");
+var actual = PTParser.Parse("alpha,\u4e16\u754c");
 if (!Equals(actual, "alpha|\u4e16\u754c"))
 {
     throw new Exception("unexpected parse result: " + actual);

@@ -3,11 +3,11 @@ package leftrecursion_test
 import (
 	"testing"
 
-	"github.com/fy0/pigeon/test/left_recursion/standart/leftrecursion"
-	"github.com/fy0/pigeon/test/left_recursion/standart/withoutleftrecursion"
+	"github.com/fy0/pegtool/test/left_recursion/standart/leftrecursion"
+	"github.com/fy0/pegtool/test/left_recursion/standart/withoutleftrecursion"
 
-	optimizedleftrecursion "github.com/fy0/pigeon/test/left_recursion/optimized/leftrecursion"
-	optimizedwithoutleftrecursion "github.com/fy0/pigeon/test/left_recursion/optimized/withoutleftrecursion"
+	optimizedleftrecursion "github.com/fy0/pegtool/test/left_recursion/optimized/leftrecursion"
+	optimizedwithoutleftrecursion "github.com/fy0/pegtool/test/left_recursion/optimized/withoutleftrecursion"
 )
 
 func TestLeftRecursionParse(t *testing.T) {

@@ -2,7 +2,7 @@
 
 PEG 默认只能报告“在最远失败位置期望哪些 matcher”。复杂文法经过多层 choice 和回溯后，这份列表往往更接近 parser 的内部路径，而不是用户能理解的错误原因。原版 Pigeon 若要替换这类默认消息，通常需要在文法各处插入 predicate/recovery，或者在 parse 之后解析内部错误，维护成本较高。
 
-Pegtool 保留位置和 `expected` 数据，同时为 Go 和 Haxe 扩展了 parser 级的 no-match formatter；应用可以在不修改生成 runtime、也不把错误文案散落到文法各处的前提下生成面向用户的错误消息。
+pegtool 保留位置和 `expected` 数据，同时为 Go 和 Haxe 扩展了 parser 级的 no-match formatter；应用可以在不修改生成 runtime、也不把错误文案散落到文法各处的前提下生成面向用户的错误消息。
 
 ## Go：`noMatchErrorFormatter`
 
@@ -69,10 +69,10 @@ Haxe 的 formatter 同样保留在 `-optimize-parser` 生成物中。其他 targ
 
 | Target | 可用数据 |
 | --- | --- |
-| TypeScript | `PigeonParseError.position`、`expected` |
-| C# | `PigeonParseException.Position`、`Expected` |
+| TypeScript | `PTParseError.position`、`expected` |
+| C# | `PTParseException.Position`、`Expected` |
 | Rust | `ParseError.position`、`expected` |
-| C99 | `PigeonResult.error`、`position` |
+| C99 | `PegtoolResult.error`、`position` |
 
 这些 target 可以在应用边界把结构化错误转换为本地化消息；当前没有与 Go/Haxe 相同的 formatter option。
 

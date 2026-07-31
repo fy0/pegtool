@@ -8,10 +8,10 @@
 | --- | --- | --- | --- |
 | Go | initializer 自行包装 `parse` | 自行暴露 `option` | `(any, error)` |
 | Haxe | `new Parser(filename, input, opts).parse(null)` | `Array<Option>` 或公开字段 | 抛出聚合 exception |
-| TypeScript | `parse(input, options)` | `ParserOptions` | 抛出 `PigeonParseError` / `Error` |
-| C# | `PigeonParser.Parse(input, options)` | `PigeonParser.ParserOptions` | 抛出 `PigeonParseException` |
-| C99 | `pigeon_parse*` | `PigeonParserOptions` | `PigeonResult.ok/error` |
-| Rust | `PigeonParser::parse*` | `ParserOptions` | `Result<Value, ParseError>` |
+| TypeScript | `parse(input, options)` | `ParserOptions` | 抛出 `PTParseError` / `Error` |
+| C# | `PTParser.Parse(input, options)` | `PTParser.ParserOptions` | 抛出 `PTParseException` |
+| C99 | `pegtool_parse*` | `PegtoolParserOptions` | `PegtoolResult.ok/error` |
+| Rust | `PTParser::parse*` | `ParserOptions` | `Result<Value, ParseError>` |
 
 ## 通用 options
 
@@ -31,12 +31,12 @@ const value = parse(input, {
 });
 ```
 
-`PigeonParseError` 提供 `position` 和 `expected`。`Position.offset` 是 UTF-8 字节 offset，`line`、`col` 从 1 开始。
+`PTParseError` 提供 `position` 和 `expected`。`Position.offset` 是 UTF-8 字节 offset，`line`、`col` 从 1 开始。
 
 ## C#
 
 ```csharp
-var value = PigeonParser.Parse(input, new PigeonParser.ParserOptions
+var value = PTParser.Parse(input, new PTParser.ParserOptions
 {
     Filename = "input.txt",
     Entrypoint = "Start",
@@ -45,22 +45,22 @@ var value = PigeonParser.Parse(input, new PigeonParser.ParserOptions
 });
 ```
 
-`PigeonParseException` 提供 `Position` 与 `Expected`。
+`PTParseException` 提供 `Position` 与 `Expected`。
 
 ## C99
 
 ```c
-PigeonParserOptions options = {0};
+PegtoolParserOptions options = {0};
 options.filename = "input.txt";
 options.entrypoint = "Start";
 options.max_expressions = 1000000;
 
-PigeonResult result = pigeon_parse_with_options(input, &options);
+PegtoolResult result = pegtool_parse_with_options(input, &options);
 /* consume result.value or result.error */
-pigeon_result_free(&result);
+pegtool_result_free(&result);
 ```
 
-`PigeonResult` 拥有其 value/error；调用方始终负责释放。
+`PegtoolResult` 拥有其 value/error；调用方始终负责释放。
 
 ## Rust
 
@@ -72,7 +72,7 @@ let options = ParserOptions {
     custom_data: None,
 };
 
-let value = PigeonParser::parse_with_options(input, options)?;
+let value = PTParser::parse_with_options(input, options)?;
 ```
 
 结果使用 `Value` 枚举，不通过 `Any` 猜测基础类型。

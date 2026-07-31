@@ -1,9 +1,9 @@
 mod parser;
 
-use parser::{PigeonParser, Value};
+use parser::{PTParser, Value};
 
 fn calculate(input: &str) -> Result<i64, String> {
-    match PigeonParser::parse(input).map_err(|error| error.to_string())? {
+    match PTParser::parse(input).map_err(|error| error.to_string())? {
         Value::Int(value) => Ok(value),
         value => Err(format!("unexpected parser result: {value:?}")),
     }
@@ -12,7 +12,7 @@ fn calculate(input: &str) -> Result<i64, String> {
 fn main() {
     let input = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
     if input.is_empty() {
-        eprintln!("usage: pigeon-calculator-example 'EXPRESSION'");
+        eprintln!("usage: pegtool-calculator-example 'EXPRESSION'");
         std::process::exit(2);
     }
     match calculate(&input) {

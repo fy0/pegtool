@@ -1,4 +1,4 @@
-if (!Equals(PigeonParser.Parse("+"), "+") || !Equals(PigeonParser.Parse("%"), "%"))
+if (!Equals(PTParser.Parse("+"), "+") || !Equals(PTParser.Parse("%"), "%"))
 {
     throw new Exception("configured operator failed");
 }
@@ -6,12 +6,12 @@ if (!Equals(PigeonParser.Parse("+"), "+") || !Equals(PigeonParser.Parse("%"), "%
 var rejected = false;
 try
 {
-    PigeonParser.Parse("-");
+    PTParser.Parse("-");
 }
-catch (PigeonParser.PigeonParseException)
+catch (PTParser.PTParseException)
 {
     rejected = true;
 }
 if (!rejected) throw new Exception("unexpectedly accepted -");
 
-Console.WriteLine(PigeonParser.Parse("%"));
+Console.WriteLine(PTParser.Parse("%"));

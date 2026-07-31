@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fy0/pigeon/examples/go/json"
+	"github.com/fy0/pegtool/examples/go/json"
 )
 
 func main() {

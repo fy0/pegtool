@@ -1,8 +1,8 @@
 # Overview
 
-Pegtool is a PEG (Parsing Expression Grammar) parser generator written in Go. It reads a `.peg` grammar and generates source code in the target language during the build. The deployed parser does not need Pegtool itself.
+pegtool is a PEG (Parsing Expression Grammar) parser generator written in Go. It reads a `.peg` grammar and generates source code in the target language during the build. The deployed parser does not need pegtool itself.
 
-The project forked from Pigeon in 2024, from a baseline that included Pigeon's 2023 `v1.2.x` release line. The two projects retain broadly similar PEG syntax, but Pegtool's grammar, value semantics, generated APIs, and runtimes have evolved independently. Performance was the primary reason for the fork, followed by extensive work on the execution efficiency of generated parsers. Eliminating costs such as implicit value arrays, state copies, and dynamic lookups required some changes to grammar and value semantics. The original analysis and measurements are recorded in [Pigeon #151](https://github.com/mna/pigeon/issues/151).
+The project forked from Pigeon in 2024, from a baseline that included Pigeon's 2023 `v1.2.x` release line. The two projects retain broadly similar PEG syntax, but pegtool's grammar, value semantics, generated APIs, and runtimes have evolved independently. Performance was the primary reason for the fork, followed by extensive work on the execution efficiency of generated parsers. Eliminating costs such as implicit value arrays, state copies, and dynamic lookups required some changes to grammar and value semantics. The original analysis and measurements are recorded in [Pigeon #151](https://github.com/mna/pigeon/issues/151).
 
 ## Why this fork exists
 
@@ -20,7 +20,7 @@ The Go ecosystem has several PEG parser generators. They generate code different
 | --- | --- | --- |
 | [`pointlander/peg`](https://github.com/pointlander/peg) | Generates highly expanded Go parsers with many `goto` statements and generally good execution speed; grammar changes can produce large generated diffs | Throughput-first projects where generated files do not need sustained review and the grammar is relatively stable |
 | [Upstream Pigeon](https://github.com/mna/pigeon) | Generates straightforward code with an understandable, extensible grammar and runtime while retaining upstream syntax and APIs | Projects that prioritize upstream compatibility and extensibility and can accept its performance on their workload |
-| Pegtool | Retains a reviewable generation structure, optimizes parser hot paths, and supports multiple targets; some value semantics differ from upstream Pigeon | Projects that need stable generated diffs, custom runtimes or diagnostics, or multiple output languages |
+| pegtool | Retains a reviewable generation structure, optimizes parser hot paths, and supports multiple targets; some value semantics differ from upstream Pigeon | Projects that need stable generated diffs, custom runtimes or diagnostics, or multiple output languages |
 
 No tool is best for every grammar. Compare performance on real input, error diagnostics, generated diffs, target languages, and whether generated files must be committed and reviewed.
 
@@ -30,7 +30,7 @@ In 2024, the author began learning Haxe and initially planned to use the Heaps.i
 
 That experiment still produced one of the project's most important structural changes. Inspired by Haxe's multi-target approach, the Pigeon builder was extended to select an output language, beginning with a Haxe target. The project then used it to implement a narrative scripting engine, demonstrating that one PEG core could generate parsers for different host languages.
 
-Development slowed for nearly two years while the author focused on other work. In 2026, more target languages and their runtimes were added, producing today's Pegtool with support for Go, Haxe, TypeScript, C#, C99, and Rust.
+Development slowed for nearly two years while the author focused on other work. In 2026, more target languages and their runtimes were added, producing today's pegtool with support for Go, Haxe, TypeScript, C#, C99, and Rust.
 
 ## Supported target languages
 

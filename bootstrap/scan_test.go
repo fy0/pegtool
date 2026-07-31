@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fy0/pigeon/ast"
+	"github.com/fy0/pegtool/ast"
 )
 
 var scanValidCases = []string{

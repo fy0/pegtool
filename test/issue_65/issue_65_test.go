@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	optimized "github.com/fy0/pigeon/test/issue_65/optimized"
-	optimizedgrammar "github.com/fy0/pigeon/test/issue_65/optimized-grammar"
+	optimized "github.com/fy0/pegtool/test/issue_65/optimized"
+	optimizedgrammar "github.com/fy0/pegtool/test/issue_65/optimized-grammar"
 )
 
 func TestOptimizeGrammar(t *testing.T) {

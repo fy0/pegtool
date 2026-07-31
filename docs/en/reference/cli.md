@@ -4,7 +4,7 @@
 pegtool [options] [GRAMMAR_FILE]
 ```
 
-Without a file, Pegtool reads the grammar from stdin. Without `-o`, it writes generated source to stdout.
+Without a file, pegtool reads the grammar from stdin. Without `-o`, it writes generated source to stdout.
 
 ## Output and targets
 

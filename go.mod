@@ -1,4 +1,4 @@
-module github.com/fy0/pigeon
+module github.com/fy0/pegtool
 
 go 1.25.0
 

@@ -126,7 +126,7 @@ pub fn parse_program(input: &str) -> Result<Value, ParseError> {
         custom_data: Some(Box::new(ParserCustomData::default())),
         ..ParserOptions::default()
     };
-    PigeonParser::parse_with_options(input, options)
+    PTParser::parse_with_options(input, options)
 }
 
 fn eval_expression(value: &Ast, variables: &HashMap<String, i64>) -> Result<i64, String> {

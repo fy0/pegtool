@@ -1,19 +1,19 @@
-start = first:word rest:("," next:word { return pigeon_value_clone(next); })* !. {
-    PigeonValue values = pigeon_value_array();
+start = first:word rest:("," next:word { return pegtool_value_clone(next); })* !. {
+    PegtoolValue values = pegtool_value_array();
     size_t index;
-    if (!pigeon_value_array_push(&values, pigeon_value_clone(first))) {
-        pigeon_value_free(&values);
-        return pigeon_value_null();
+    if (!pegtool_value_array_push(&values, pegtool_value_clone(first))) {
+        pegtool_value_free(&values);
+        return pegtool_value_null();
     }
-    if (rest != NULL && rest->type == PIGEON_VALUE_ARRAY) {
+    if (rest != NULL && rest->type == PEGTOOL_VALUE_ARRAY) {
         for (index = 0; index < rest->as.array.length; index++) {
-            if (!pigeon_value_array_push(&values, pigeon_value_clone(&rest->as.array.items[index]))) {
-                pigeon_value_free(&values);
-                return pigeon_value_null();
+            if (!pegtool_value_array_push(&values, pegtool_value_clone(&rest->as.array.items[index]))) {
+                pegtool_value_free(&values);
+                return pegtool_value_null();
             }
         }
     }
     return values;
 }
 
-word = [\p{L}]+ { return pigeon_value_string_n(c->text, c->text_length); }
+word = [\p{L}]+ { return pegtool_value_string_n(c->text, c->text_length); }

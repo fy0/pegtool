@@ -4,7 +4,7 @@ import MigrationPrompt from "../.vitepress/theme/components/MigrationPrompt.vue"
 
 # 从原版 Pigeon 迁移
 
-Pegtool 使用 Go 编写，于 2024 年从 Pigeon 分叉，分叉基线包含 Pigeon 2023 年的 `v1.2.x` 发布线。两者的 PEG 写法总体相似，但 Pegtool 不是 Pigeon 的语法兼容层；其文法、值语义、生成 API 和运行时已经独立演进。性能是这个 fork 的主要起因，此后进行了大量优化；部分优化需要改变原版的隐式值传递语义，背景见 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
+pegtool 使用 Go 编写，于 2024 年从 Pigeon 分叉，分叉基线包含 Pigeon 2023 年的 `v1.2.x` 发布线。两者的 PEG 写法总体相似，但 pegtool 不是 Pigeon 的语法兼容层；其文法、值语义、生成 API 和运行时已经独立演进。性能是这个 fork 的主要起因，此后进行了大量优化；部分优化需要改变原版的隐式值传递语义，背景见 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
 
 大多数迁移可以交给具备仓库读写和测试能力的 code agent 完成。下面的 Prompt 会自动带上本页的完整链接，可直接交给 agent：
 
@@ -12,7 +12,7 @@ Pegtool 使用 Go 编写，于 2024 年从 Pigeon 分叉，分叉基线包含 Pi
 
 ## 迁移差异总览
 
-| 项目 | 原版 Pigeon `v1.2.x` | Pegtool 当前行为 |
+| 项目 | 原版 Pigeon `v1.2.x` | pegtool 当前行为 |
 | --- | --- | --- |
 | 终结符值 | 字面量、字符类和 `.` 返回 `[]byte` | 返回目标语言的空值；文本用 `label:<expr>` 捕获 |
 | sequence 值 | 返回 `[]any`，每个子表达式占一项 | 返回空值，不创建隐式数组 |
@@ -42,10 +42,10 @@ Pair <- pair:("a" ":" "b") {
 }
 ```
 
-Pegtool 应显式说明需要的是原文还是结构化值：
+pegtool 应显式说明需要的是原文还是结构化值：
 
 ```peg
-// Pegtool
+// pegtool
 Word = value:<[a-z]+> {
     return value
 }
@@ -58,10 +58,10 @@ Pair = pair:<("a" ":" "b")> {
 
 仅把 `pair:(...)` 原样迁移会得到空值。若需要结构化结果，应让内部 action 显式返回对象，再通过标签接收；不要依赖旧 sequence 的嵌套 `[]any`。
 
-repetition 同样需要检查。原版会为每次匹配保留一项；Pegtool 只收集非空的显式返回值：
+repetition 同样需要检查。原版会为每次匹配保留一项；pegtool 只收集非空的显式返回值：
 
 ```peg
-// Pegtool：每个 Name 显式返回 string，因此 Names 能收集这些值
+// pegtool：每个 Name 显式返回 string，因此 Names 能收集这些值
 Name  = value:<[a-z]+> { return value }
 Names = first:Name rest:(_ "," _ next:Name { return next })* {
     values := []any{first}
@@ -87,10 +87,10 @@ Allowed <- &{
 } .
 ```
 
-Pegtool 的 Go 代码块返回单个值。解析错误通过当前 parser 记录：
+pegtool 的 Go 代码块返回单个值。解析错误通过当前 parser 记录：
 
 ```peg
-// Pegtool
+// pegtool
 Integer = [0-9]+ {
     value, err := strconv.Atoi(string(c.text))
     if err != nil {
@@ -109,7 +109,7 @@ Allowed = &{
 
 ## Go API 需要显式包装
 
-原版生成物固定导出 `Parse`、`ParseFile`、`ParseReader`、`Entrypoint`、`Memoize` 等 API。Pegtool 的 Go runtime 只提供包内的 `parse`、`newParser`、`option` 和 `memoized`；项目可以在 initializer 中保留原有的公开表面：
+原版生成物固定导出 `Parse`、`ParseFile`、`ParseReader`、`Entrypoint`、`Memoize` 等 API。pegtool 的 Go runtime 只提供包内的 `parse`、`newParser`、`option` 和 `memoized`；项目可以在 initializer 中保留原有的公开表面：
 
 ```peg
 {
@@ -134,7 +134,7 @@ Start = value:<[a-z]+> !. { return value }
 
 ## 状态不能机械替换
 
-原版的 `state` 会随 PEG 回溯恢复，`globalStore` 不会，`#{...}` 还具有专门的状态修改语义。Pegtool 的 `c.data` 是调用方提供的 `*ParserCustomData`，修改后不会自动回滚。因此不存在把三个旧概念统一替换成 `c.data` 且保持行为不变的通用改写。
+原版的 `state` 会随 PEG 回溯恢复，`globalStore` 不会，`#{...}` 还具有专门的状态修改语义。pegtool 的 `c.data` 是调用方提供的 `*ParserCustomData`，修改后不会自动回滚。因此不存在把三个旧概念统一替换成 `c.data` 且保持行为不变的通用改写。
 
 迁移时应先区分每个字段：
 
@@ -143,17 +143,17 @@ Start = value:<[a-z]+> !. { return value }
 3. 需要随 choice 失败而恢复的状态，应由文法保存和恢复，或改为返回不可变结果。
 4. memo 命中不会重新执行规则内部的 action 或 predicate；配置若在一次 parse 中变化，应关闭 memo 或重新划分解析生命周期。
 
-Pegtool 另外提供 `label:<expr>` 文本捕获、`&&` / `!!` 消费判断和 `*{...}` lookahead 内代码表达式。这些是当前文法能力，不应反向写进仍由原版 Pigeon 生成的文法。
+pegtool 另外提供 `label:<expr>` 文本捕获、`&&` / `!!` 消费判断和 `*{...}` lookahead 内代码表达式。这些是当前文法能力，不应反向写进仍由原版 Pigeon 生成的文法。
 
 ## 左递归与入口规则
 
-原版可通过实验性参数支持直接或间接左递归；Pegtool 会在生成阶段拒绝它。需要改成首项加尾项重复：
+原版可通过实验性参数支持直接或间接左递归；pegtool 会在生成阶段拒绝它。需要改成首项加尾项重复：
 
 ```peg
 // 原版可选左递归写法
 Expr <- Expr "+" Term / Term
 
-// Pegtool
+// pegtool
 Expr = first:Term rest:(_ "+" _ next:Term { return next })* {
     return foldAdd(first, rest)
 }

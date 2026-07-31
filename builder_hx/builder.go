@@ -7,9 +7,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/fy0/pigeon/ast"
+	"github.com/fy0/pegtool/ast"
 
-	base "github.com/fy0/pigeon/builder"
+	base "github.com/fy0/pegtool/builder"
 )
 
 const (

@@ -2,11 +2,11 @@ const string defaultProgram = "a = 1\nif a:\n    b = 2\n    if b:\n        a = 4
 
 static int Run(string input)
 {
-    var options = new PigeonParser.ParserOptions
+    var options = new PTParser.ParserOptions
     {
-        CustomData = new PigeonParser.IndentationData(),
+        CustomData = new PTParser.IndentationData(),
     };
-    return PigeonParser.Execute(PigeonParser.Parse(input, options));
+    return PTParser.Execute(PTParser.Parse(input, options));
 }
 
 static void CheckBaseline()
@@ -18,7 +18,7 @@ static void CheckBaseline()
     {
         Run("x = 1\nif x:\n  x = 2\nreturn x\n");
     }
-    catch (PigeonParser.PigeonParseException)
+    catch (PTParser.PTParseException)
     {
         rejected = true;
     }

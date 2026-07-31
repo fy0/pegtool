@@ -1,6 +1,6 @@
 # Multiple Grammars and Entry Points
 
-Pegtool can place multiple grammars on one Go parser runtime. The explicitly designed and tested workflow is `grammar-only` within one Go package. Relying on this capability is not currently recommended for other targets.
+pegtool can place multiple grammars on one Go parser runtime. The explicitly designed and tested workflow is `grammar-only` within one Go package. Relying on this capability is not currently recommended for other targets.
 
 ## Generate the main grammar
 

@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Pegtool
+  name: pegtool
   text: A PEG parser generator written in Go
   tagline: Generate reviewable, deployable parser source for Go, Haxe, TypeScript, C#, C99, and Rust.
   actions:
@@ -24,9 +24,9 @@ features:
     details: Choose Go, Haxe, TypeScript, C#, C99, or Rust to match your deployment environment.
 ---
 
-## What is Pegtool?
+## What is pegtool?
 
-Pegtool is a PEG (Parsing Expression Grammar) parser generator written in Go. A single grammar can generate source code for Go, Haxe, TypeScript, C#, C99, and Rust. The project forked from Pigeon in 2024, from a baseline that included Pigeon's 2023 `v1.2.x` release line. Its grammar and runtime have evolved independently since then. The main reason for the fork was to improve upstream Pigeon's performance on real grammars. Many optimizations followed, and some required changes to grammar and value semantics. See [Pigeon #151](https://github.com/mna/pigeon/issues/151) for the early analysis.
+pegtool is a PEG (Parsing Expression Grammar) parser generator written in Go. A single grammar can generate source code for Go, Haxe, TypeScript, C#, C99, and Rust. The project forked from Pigeon in 2024, from a baseline that included Pigeon's 2023 `v1.2.x` release line. Its grammar and runtime have evolved independently since then. The main reason for the fork was to improve upstream Pigeon's performance on real grammars. Many optimizations followed, and some required changes to grammar and value semantics. See [Pigeon #151](https://github.com/mna/pigeon/issues/151) for the early analysis.
 
 ```powershell
 pegtool -t go   -o parser.go grammar.peg
@@ -39,7 +39,7 @@ pegtool -t rust -o parser.rs grammar.peg
 
 ## Where to start
 
-- New to Pegtool: read the [Quick Start](/en/guide/getting-started).
+- New to pegtool: read the [Quick Start](/en/guide/getting-started).
 - Migrating from upstream Pigeon: use the [automated migration guide and prompt](/en/guide/fork-semantics).
 - Preparing for production: choose [performance options](/en/guide/performance-options) according to your workload.
 - Writing a cross-language grammar: see the [target overview](/en/targets/).

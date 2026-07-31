@@ -124,7 +124,7 @@ Rule display names, no-match formatters, action-level semantic errors, and `%{La
 
 ## Left recursion
 
-The current Pegtool builder rejects left recursion:
+The current pegtool builder rejects left recursion:
 
 ```peg
 // Not supported.

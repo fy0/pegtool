@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fy0/pigeon/testutils"
+	"github.com/fy0/pegtool/testutils"
 )
 
 func TestIsEmpty(t *testing.T) {

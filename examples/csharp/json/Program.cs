@@ -1,21 +1,21 @@
 static void CheckBaseline()
 {
-    var value = (Dictionary<string, object?>)PigeonParser.Parse("{\"items\":[1,null,true],\"name\":\"pigeon\"}")!;
+    var value = (Dictionary<string, object?>)PTParser.Parse("{\"items\":[1,null,true],\"name\":\"pigeon\"}")!;
     var items = (List<object?>)value["items"]!;
     if (!Equals(value["name"], "pigeon") || items.Count != 3 || !Equals(items[0], 1.0) || items[1] != null || !Equals(items[2], true))
     {
         throw new Exception("unexpected object value");
     }
 
-    var escaped = (string)PigeonParser.Parse("\"line\\n\\uD83D\\uDE00\\/\"")!;
+    var escaped = (string)PTParser.Parse("\"line\\n\\uD83D\\uDE00\\/\"")!;
     if (escaped != "line\n\U0001F600/") throw new Exception("unexpected escaped string: " + escaped);
 
     var rejected = false;
     try
     {
-        PigeonParser.Parse("00");
+        PTParser.Parse("00");
     }
-    catch (PigeonParser.PigeonParseException)
+    catch (PTParser.PTParseException)
     {
         rejected = true;
     }
@@ -26,4 +26,4 @@ CheckBaseline();
 var input = args.Length == 0
     ? "{\"pigeon\":true,\"targets\":[\"go\",\"rust\",\"haxe\",\"typescript\",\"csharp\"]}"
     : string.Join(" ", args);
-Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(PigeonParser.Parse(input)));
+Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(PTParser.Parse(input)));

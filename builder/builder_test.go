@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fy0/pigeon/ast"
-	"github.com/fy0/pigeon/bootstrap"
+	"github.com/fy0/pegtool/ast"
+	"github.com/fy0/pegtool/bootstrap"
 )
 
 var grammar = `

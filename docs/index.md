@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Pegtool
+  name: pegtool
   text: 使用 Go 编写的 PEG 解析器生成器
   tagline: 可为 Go、Haxe、TypeScript、C#、C99 与 Rust 生成可审阅、可部署的解析器源码。
   actions:
@@ -24,9 +24,9 @@ features:
     details: 可按项目的部署环境选择 Go、Haxe、TypeScript、C#、C99 或 Rust target。
 ---
 
-## Pegtool 是什么
+## pegtool 是什么
 
-Pegtool 是一个使用 Go 编写的 PEG（Parsing Expression Grammar）解析器生成器，可以从同一套文法生成 Go、Haxe、TypeScript、C#、C99 和 Rust 源码。项目在 2024 年从 Pigeon 分叉，基线包含 Pigeon 2023 年 `v1.2.x` 发布线；此后文法和运行时已经独立演进。这个 fork 的首要原因是改善原版 Pigeon 在实际文法中的性能，围绕这一目标进行了大量优化；部分优化不得不调整文法和值语义，早期分析见 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
+pegtool 是一个使用 Go 编写的 PEG（Parsing Expression Grammar）解析器生成器，可以从同一套文法生成 Go、Haxe、TypeScript、C#、C99 和 Rust 源码。项目在 2024 年从 Pigeon 分叉，基线包含 Pigeon 2023 年 `v1.2.x` 发布线；此后文法和运行时已经独立演进。这个 fork 的首要原因是改善原版 Pigeon 在实际文法中的性能，围绕这一目标进行了大量优化；部分优化不得不调整文法和值语义，早期分析见 [Pigeon #151](https://github.com/mna/pigeon/issues/151)。
 
 ```powershell
 pegtool -t go   -o parser.go grammar.peg

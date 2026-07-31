@@ -74,7 +74,7 @@ C_EXAMPLE_GENERATED_SRC = $(C_EXAMPLES_DIR)/words/parser.c
 all: $(BUILDER_DIR)/generated_static_code.go $(BINDIR)/static_code_generator \
 	$(BUILDER_DIR)/generated_static_code_range_table.go \
 	$(BINDIR)/bootstrap-build $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go \
-	$(BINDIR)/bootstrap-pigeon $(ROOT)/pigeon.go $(BINDIR)/pigeon \
+	$(BINDIR)/bootstrap-pigeon $(ROOT)/pigeon.go $(BINDIR)/pegtool \
 	$(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) \
 	$(RUST_EXAMPLE_GENERATED_SRC) $(HAXE_EXAMPLE_GENERATED_SRC) \
 	$(TYPESCRIPT_EXAMPLE_GENERATED_SRC) $(CSHARP_EXAMPLE_GENERATED_SRC) \
@@ -98,7 +98,7 @@ $(BINDIR)/bootstrap-pigeon: $(BOOTSTRAPPIGEON_SRC) \
 $(ROOT)/pigeon.go: $(BINDIR)/bootstrap-pigeon $(PIGEON_GRAMMAR)
 	$(BINDIR)/bootstrap-pigeon $(PIGEON_GRAMMAR) > $@
 
-$(BINDIR)/pigeon: $(ROOT_SRC) $(ROOT)/pigeon.go $(TARGET_BUILDER_SRC)
+$(BINDIR)/pegtool: $(ROOT_SRC) $(ROOT)/pigeon.go $(TARGET_BUILDER_SRC)
 	go build -o $@ $(ROOT)
 
 $(BUILDER_DIR)/generated_static_code.go: $(BUILDER_DIR)/static_code.go $(BINDIR)/static_code_generator
@@ -111,202 +111,202 @@ $(BOOTSTRAP_GRAMMAR):
 $(PIGEON_GRAMMAR):
 
 # surely there's a better way to define the examples and test targets
-$(GO_EXAMPLES_DIR)/json/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(GO_EXAMPLES_DIR)/json/optimized/json.go $(GO_EXAMPLES_DIR)/json/indexed/json.go $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(GO_EXAMPLES_DIR)/json/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(GO_EXAMPLES_DIR)/json/optimized/json.go $(GO_EXAMPLES_DIR)/json/indexed/json.go $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(GO_EXAMPLES_DIR)/json/optimized/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser $< > $@
+$(GO_EXAMPLES_DIR)/json/optimized/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser $< > $@
 
-$(GO_EXAMPLES_DIR)/json/indexed/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-ref-expr-by-index $< > $@
+$(GO_EXAMPLES_DIR)/json/indexed/json.go: $(GO_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-ref-expr-by-index $< > $@
 
-$(GO_EXAMPLES_DIR)/calculator/calculator.go: $(GO_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(GO_EXAMPLES_DIR)/calculator/calculator.go: $(GO_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(GO_EXAMPLES_DIR)/indentation/indentation.go: $(GO_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(GO_EXAMPLES_DIR)/indentation/indentation.go: $(GO_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg.go: $(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg.go: $(GO_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(RUST_EXAMPLES_DIR)/calculator/src/parser.rs: $(RUST_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t rust -o $@ $<
+$(RUST_EXAMPLES_DIR)/calculator/src/parser.rs: $(RUST_EXAMPLES_DIR)/calculator/calculator.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t rust -o $@ $<
 
-$(RUST_EXAMPLES_DIR)/indentation/src/parser.rs: $(RUST_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t rust -o $@ $<
+$(RUST_EXAMPLES_DIR)/indentation/src/parser.rs: $(RUST_EXAMPLES_DIR)/indentation/indentation.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t rust -o $@ $<
 
-$(RUST_EXAMPLES_DIR)/json/src/parser.rs: $(RUST_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t rust -o $@ $<
+$(RUST_EXAMPLES_DIR)/json/src/parser.rs: $(RUST_EXAMPLES_DIR)/json/json.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t rust -o $@ $<
 
-$(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs: $(RUST_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t rust -o $@ $<
+$(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs: $(RUST_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t rust -o $@ $<
 
-$(HAXE_EXAMPLES_DIR)/%/Parser.hx: $(HAXE_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t hx -o $@ $<
+$(HAXE_EXAMPLES_DIR)/%/Parser.hx: $(HAXE_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t hx -o $@ $<
 
-$(TYPESCRIPT_EXAMPLES_DIR)/%/parser.ts: $(TYPESCRIPT_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t ts -o $@ $<
+$(TYPESCRIPT_EXAMPLES_DIR)/%/parser.ts: $(TYPESCRIPT_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t ts -o $@ $<
 
-$(CSHARP_EXAMPLES_DIR)/%/Parser.cs: $(CSHARP_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t cs -o $@ $<
+$(CSHARP_EXAMPLES_DIR)/%/Parser.cs: $(CSHARP_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t cs -o $@ $<
 
-$(C_EXAMPLES_DIR)/words/parser.c: $(C_EXAMPLES_DIR)/words/words.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -t c -o $@ $<
+$(C_EXAMPLES_DIR)/words/parser.c: $(C_EXAMPLES_DIR)/words/words.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -t c -o $@ $<
 
-$(TEST_DIR)/andnot/andnot.go: $(TEST_DIR)/andnot/andnot.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/andnot/andnot.go: $(TEST_DIR)/andnot/andnot.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/predicates/predicates.go: $(TEST_DIR)/predicates/predicates.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/predicates/predicates.go: $(TEST_DIR)/predicates/predicates.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_1/issue_1.go: $(TEST_DIR)/issue_1/issue_1.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_1/issue_1.go: $(TEST_DIR)/issue_1/issue_1.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/linear/linear.go: $(TEST_DIR)/linear/linear.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/linear/linear.go: $(TEST_DIR)/linear/linear.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_18/issue_18.go: $(TEST_DIR)/issue_18/issue_18.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_18/issue_18.go: $(TEST_DIR)/issue_18/issue_18.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/runeerror/runeerror.go: $(TEST_DIR)/runeerror/runeerror.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/runeerror/runeerror.go: $(TEST_DIR)/runeerror/runeerror.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/errorpos/errorpos.go: $(TEST_DIR)/errorpos/errorpos.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/errorpos/errorpos.go: $(TEST_DIR)/errorpos/errorpos.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/global_store/global_store.go: $(TEST_DIR)/global_store/global_store.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/global_store/global_store.go: $(TEST_DIR)/global_store/global_store.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/goto/goto.go: $(TEST_DIR)/goto/goto.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/goto/goto.go: $(TEST_DIR)/goto/goto.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/goto_state/goto_state.go: $(TEST_DIR)/goto_state/goto_state.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/goto_state/goto_state.go: $(TEST_DIR)/goto_state/goto_state.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/max_expr_cnt/maxexpr.go: $(TEST_DIR)/max_expr_cnt/maxexpr.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/max_expr_cnt/maxexpr.go: $(TEST_DIR)/max_expr_cnt/maxexpr.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/labeled_failures/labeled_failures.go: $(TEST_DIR)/labeled_failures/labeled_failures.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/labeled_failures/labeled_failures.go: $(TEST_DIR)/labeled_failures/labeled_failures.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/thrownrecover/thrownrecover.go: $(TEST_DIR)/thrownrecover/thrownrecover.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/thrownrecover/thrownrecover.go: $(TEST_DIR)/thrownrecover/thrownrecover.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/alternate_entrypoint/altentry.go: $(TEST_DIR)/alternate_entrypoint/altentry.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar -alternate-entrypoints Entry2,Entry3,C $< > $@
+$(TEST_DIR)/alternate_entrypoint/altentry.go: $(TEST_DIR)/alternate_entrypoint/altentry.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar -alternate-entrypoints Entry2,Entry3,C $< > $@
 
-$(TEST_DIR)/state/state.go: $(TEST_DIR)/state/state.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar $< > $@
+$(TEST_DIR)/state/state.go: $(TEST_DIR)/state/state.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar $< > $@
 
-$(TEST_DIR)/stateclone/stateclone.go: $(TEST_DIR)/stateclone/stateclone.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/stateclone/stateclone.go: $(TEST_DIR)/stateclone/stateclone.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/statereadonly/statereadonly.go: $(TEST_DIR)/statereadonly/statereadonly.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/statereadonly/statereadonly.go: $(TEST_DIR)/statereadonly/statereadonly.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/staterestore/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/staterestore/optimized/staterestore.go $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/staterestore/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/staterestore/optimized/staterestore.go $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/staterestore/standard/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/staterestore/standard/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/staterestore/optimized/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar -optimize-parser -alternate-entrypoints TestAnd,TestNot $< > $@
+$(TEST_DIR)/staterestore/optimized/staterestore.go: $(TEST_DIR)/staterestore/staterestore.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar -optimize-parser -alternate-entrypoints TestAnd,TestNot $< > $@
 
-$(TEST_DIR)/emptystate/emptystate.go: $(TEST_DIR)/emptystate/emptystate.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/emptystate/emptystate.go: $(TEST_DIR)/emptystate/emptystate.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_65/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_65/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_65/optimized/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser -optimize-basic-latin $< > $@
+$(TEST_DIR)/issue_65/optimized/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser -optimize-basic-latin $< > $@
 
-$(TEST_DIR)/issue_65/optimized-grammar/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar $< > $@
+$(TEST_DIR)/issue_65/optimized-grammar/issue_65.go: $(TEST_DIR)/issue_65/issue_65.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar $< > $@
 
-$(TEST_DIR)/issue_70/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(TEST_DIR)/issue_70/optimized/issue_70.go $(TEST_DIR)/issue_70/optimized-grammar/issue_70.go $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_70/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(TEST_DIR)/issue_70/optimized/issue_70.go $(TEST_DIR)/issue_70/optimized-grammar/issue_70.go $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_70/optimized/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser -optimize-basic-latin $< > $@
+$(TEST_DIR)/issue_70/optimized/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser -optimize-basic-latin $< > $@
 
-$(TEST_DIR)/issue_70/optimized-grammar/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar $< > $@
+$(TEST_DIR)/issue_70/optimized-grammar/issue_70.go: $(TEST_DIR)/issue_70/issue_70.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar $< > $@
 
-$(TEST_DIR)/issue_70b/issue_70b.go: $(TEST_DIR)/issue_70b/issue_70b.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-grammar -support-left-recursion $< > $@
+$(TEST_DIR)/issue_70b/issue_70b.go: $(TEST_DIR)/issue_70b/issue_70b.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-grammar -support-left-recursion $< > $@
 
-$(TEST_DIR)/issue_79/issue_79.go: $(TEST_DIR)/issue_79/issue_79.peg $(BINDIR)/pigeon
-	@! $(BINDIR)/pigeon $< > $@ 2>/dev/null && exit 0 || echo "failure, expect build to fail due to left recursion!" && exit 1
-	$(BINDIR)/pigeon -support-left-recursion $< > $@
+$(TEST_DIR)/issue_79/issue_79.go: $(TEST_DIR)/issue_79/issue_79.peg $(BINDIR)/pegtool
+	@! $(BINDIR)/pegtool $< > $@ 2>/dev/null && exit 0 || echo "failure, expect build to fail due to left recursion!" && exit 1
+	$(BINDIR)/pegtool -support-left-recursion $< > $@
 
-$(TEST_DIR)/issue_80/issue_80.go: $(TEST_DIR)/issue_80/issue_80.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_80/issue_80.go: $(TEST_DIR)/issue_80/issue_80.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_115/issue_115.go: $(TEST_DIR)/issue_115/issue_115.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_115/issue_115.go: $(TEST_DIR)/issue_115/issue_115.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
-$(TEST_DIR)/issue_134/issue_134.go: $(TEST_DIR)/issue_134/issue_134.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+$(TEST_DIR)/issue_134/issue_134.go: $(TEST_DIR)/issue_134/issue_134.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
 $(TEST_DIR)/left_recursion/left_recursion.go: \
 		$(TEST_DIR)/left_recursion/standart/leftrecursion/left_recursion.go \
 		$(TEST_DIR)/left_recursion/optimized/leftrecursion/left_recursion.go \
-		$(BINDIR)/pigeon
+		$(BINDIR)/pegtool
 
 $(TEST_DIR)/left_recursion/standart/leftrecursion/left_recursion.go: \
-		$(TEST_DIR)/left_recursion/left_recursion.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -support-left-recursion $< > $@
+		$(TEST_DIR)/left_recursion/left_recursion.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -support-left-recursion $< > $@
 
 $(TEST_DIR)/left_recursion/optimized/leftrecursion/left_recursion.go: \
-		$(TEST_DIR)/left_recursion/left_recursion.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser -support-left-recursion $< > $@
+		$(TEST_DIR)/left_recursion/left_recursion.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser -support-left-recursion $< > $@
 
 $(TEST_DIR)/left_recursion/without_left_recursion.go: \
 		$(TEST_DIR)/left_recursion/standart/withoutleftrecursion/without_left_recursion.go \
 		$(TEST_DIR)/left_recursion/optimized/withoutleftrecursion/without_left_recursion.go \
-		$(BINDIR)/pigeon
+		$(BINDIR)/pegtool
 
 $(TEST_DIR)/left_recursion/standart/withoutleftrecursion/without_left_recursion.go: \
 		$(TEST_DIR)/left_recursion/without_left_recursion.peg \
-		$(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint $< > $@
+		$(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint $< > $@
 
 $(TEST_DIR)/left_recursion/optimized/withoutleftrecursion/without_left_recursion.go: \
 		$(TEST_DIR)/left_recursion/without_left_recursion.peg \
-		$(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser $< > $@
+		$(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser $< > $@
 
 $(TEST_DIR)/left_recursion_state/left_recursion_state.go: \
 		$(TEST_DIR)/left_recursion_state/standart/left_recursion_state.go \
 		$(TEST_DIR)/left_recursion_state/optimized/left_recursion_state.go \
-		$(BINDIR)/pigeon
+		$(BINDIR)/pegtool
 
 $(TEST_DIR)/left_recursion_state/standart/left_recursion_state.go: \
-		$(TEST_DIR)/left_recursion_state/left_recursion_state.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -support-left-recursion $< > $@
+		$(TEST_DIR)/left_recursion_state/left_recursion_state.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -support-left-recursion $< > $@
 
 $(TEST_DIR)/left_recursion_state/optimized/left_recursion_state.go: \
-		$(TEST_DIR)/left_recursion_state/left_recursion_state.peg $(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -optimize-parser -support-left-recursion $< > $@
+		$(TEST_DIR)/left_recursion_state/left_recursion_state.peg $(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -optimize-parser -support-left-recursion $< > $@
 
 $(TEST_DIR)/left_recursion_labeled_failures/left_recursion_labeled_failures.go: \
 		$(TEST_DIR)/left_recursion_labeled_failures/left_recursion_labeled_failures.peg \
-		$(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -support-left-recursion $< > $@
+		$(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -support-left-recursion $< > $@
 
 $(TEST_DIR)/left_recursion_thrownrecover/left_recursion_thrownrecover.go: \
 		$(TEST_DIR)/left_recursion_thrownrecover/left_recursion_thrownrecover.peg \
-		$(BINDIR)/pigeon
-	$(BINDIR)/pigeon -nolint -support-left-recursion $< > $@
+		$(BINDIR)/pegtool
+	$(BINDIR)/pegtool -nolint -support-left-recursion $< > $@
 
 lint:
 	golangci-lint run ./...
 
 cmp:
 	@boot=$$(mktemp) && $(BINDIR)/bootstrap-pigeon $(PIGEON_GRAMMAR) > $$boot && \
-	official=$$(mktemp) && $(BINDIR)/pigeon $(PIGEON_GRAMMAR) > $$official && \
+	official=$$(mktemp) && $(BINDIR)/pegtool $(PIGEON_GRAMMAR) > $$official && \
 	cmp $$boot $$official && \
 	unlink $$boot && \
 	unlink $$official

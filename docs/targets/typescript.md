@@ -4,7 +4,7 @@ TypeScript target 生成可在 `--strict` 下编译的独立模块，适合浏�
 
 ## 最小可运行示例
 
-在空目录中手写下面两个文件。`parser.ts` 由 Pegtool 生成。
+在空目录中手写下面两个文件。`parser.ts` 由 pegtool 生成。
 
 ### `identifier.peg`
 
@@ -41,7 +41,7 @@ name_世界
 
 ## 生成 API
 
-生成模块导出 `parse`、`Parser`、`ParserOptions`、`PigeonParseError`、`Position`、`Current`、`Grammar` 和文法变量。完整 options 调用如下：
+生成模块导出 `parse`、`Parser`、`ParserOptions`、`PTParseError`、`Position`、`Current`、`Grammar` 和文法变量。完整 options 调用如下：
 
 ```ts
 const value = parse(source, {

@@ -3,8 +3,8 @@ package builder_test
 import (
 	"testing"
 
-	"github.com/fy0/pigeon/builder"
-	"github.com/fy0/pigeon/testutils"
+	"github.com/fy0/pegtool/builder"
+	"github.com/fy0/pegtool/testutils"
 )
 
 func TestStronglyConnectedComponents(t *testing.T) { //Nolint:funlen

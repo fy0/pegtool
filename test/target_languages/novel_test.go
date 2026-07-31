@@ -62,7 +62,7 @@ func testNovelCSharp(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "story.ns"), readStory(t))
 	writeFile(t, filepath.Join(dir, "Program.cs"), []byte(`
 var source = File.ReadAllText("story.ns");
-var sections = ((List<object?>)PigeonParser.Parse(source)!).Select(value => (string)value!).ToList();
+var sections = ((List<object?>)PTParser.Parse(source)!).Select(value => (string)value!).ToList();
 if (sections.Count != 5) throw new Exception("section count: " + sections.Count);
 var first = sections[0].Split('\u001f');
 var branch = sections[1].Split('\u001f');
@@ -72,10 +72,10 @@ if (!first[3].Contains("<codeInText>player")) throw new Exception("missing inlin
 if (!first[3].Contains("<codeBlock> val = select")) throw new Exception("missing code block");
 if (branch[1] != "val == 1" || branch[2] != "end") throw new Exception("branch metadata");
 if (last[0] != "end" || !last[3].Contains("\u7ed3\u675f")) throw new Exception("last section");
-PigeonParser.Parse("a", new PigeonParser.ParserOptions { Entrypoint = "predicateAnd" });
-PigeonParser.Parse("b", new PigeonParser.ParserOptions { Entrypoint = "predicateNot" });
-PigeonParser.Parse("", new PigeonParser.ParserOptions { Entrypoint = "codeProbe" });
-PigeonParser.Parse("x", new PigeonParser.ParserOptions { Entrypoint = "recoveryProbe" });
+PTParser.Parse("a", new PTParser.ParserOptions { Entrypoint = "predicateAnd" });
+PTParser.Parse("b", new PTParser.ParserOptions { Entrypoint = "predicateNot" });
+PTParser.Parse("", new PTParser.ParserOptions { Entrypoint = "codeProbe" });
+PTParser.Parse("x", new PTParser.ParserOptions { Entrypoint = "recoveryProbe" });
 Console.WriteLine("novel-ok");
 `))
 	writeFile(t, filepath.Join(dir, "NovelTargetTest.csproj"), []byte(`
@@ -113,7 +113,7 @@ func testNovelRust(t *testing.T) {
 	source.Write(generated)
 	source.WriteString(`
 fn main() {
-    let sections = match PigeonParser::parse(include_str!("story.ns")) {
+    let sections = match PTParser::parse(include_str!("story.ns")) {
         Ok(Value::Array(values)) => values,
         Ok(value) => panic!("unexpected result: {:?}", value),
         Err(error) => panic!("parse failed: {}", error),
@@ -143,7 +143,7 @@ fn main() {
             entrypoint: Some(entrypoint.to_string()),
             ..ParserOptions::default()
         };
-        PigeonParser::parse_with_options(input, options).unwrap();
+        PTParser::parse_with_options(input, options).unwrap();
     }
     println!("novel-ok");
 }
@@ -176,7 +176,7 @@ func generateNovelParser(t *testing.T, target string) (string, []byte) {
 		grammarFile,
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("pigeon target %s failed: %v\n%s", target, err, output)
+		t.Fatalf("pegtool target %s failed: %v\n%s", target, err, output)
 	}
 	generated, err := os.ReadFile(outputFile)
 	if err != nil {

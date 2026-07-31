@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	leftrecursionthrownrecover "github.com/fy0/pigeon/test/left_recursion_thrownrecover"
+	leftrecursionthrownrecover "github.com/fy0/pegtool/test/left_recursion_thrownrecover"
 )
 
 func TestLeftRecursionWithThrowAndRecover(t *testing.T) {

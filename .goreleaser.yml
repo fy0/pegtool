@@ -9,7 +9,7 @@ before:
     - go mod tidy
 builds:
   - main: .
-    binary: pigeon
+    binary: pegtool
     env:
       - CGO_ENABLED=0
     goos:
@@ -32,6 +32,6 @@ changelog:
 release:
   github:
     owner: fy0
-    name: pigeon
+    name: pegtool
 gomod:
   proxy: true

@@ -8,10 +8,10 @@ Targets share concepts such as entry points, maximum expression counts, custom d
 | --- | --- | --- | --- |
 | Go | Initializer wraps `parse` | Expose `option` through a project wrapper | `(any, error)` |
 | Haxe | `new Parser(filename, input, opts).parse(null)` | `Array<Option>` or public fields | Throws an aggregate exception |
-| TypeScript | `parse(input, options)` | `ParserOptions` | Throws `PigeonParseError` / `Error` |
-| C# | `PigeonParser.Parse(input, options)` | `PigeonParser.ParserOptions` | Throws `PigeonParseException` |
-| C99 | `pigeon_parse*` | `PigeonParserOptions` | `PigeonResult.ok/error` |
-| Rust | `PigeonParser::parse*` | `ParserOptions` | `Result<Value, ParseError>` |
+| TypeScript | `parse(input, options)` | `ParserOptions` | Throws `PTParseError` / `Error` |
+| C# | `PTParser.Parse(input, options)` | `PTParser.ParserOptions` | Throws `PTParseException` |
+| C99 | `pegtool_parse*` | `PegtoolParserOptions` | `PegtoolResult.ok/error` |
+| Rust | `PTParser::parse*` | `ParserOptions` | `Result<Value, ParseError>` |
 
 ## Common options
 
@@ -31,12 +31,12 @@ const value = parse(input, {
 });
 ```
 
-`PigeonParseError` provides `position` and `expected`. `Position.offset` is a UTF-8 byte offset; `line` and `col` start at 1.
+`PTParseError` provides `position` and `expected`. `Position.offset` is a UTF-8 byte offset; `line` and `col` start at 1.
 
 ## C#
 
 ```csharp
-var value = PigeonParser.Parse(input, new PigeonParser.ParserOptions
+var value = PTParser.Parse(input, new PTParser.ParserOptions
 {
     Filename = "input.txt",
     Entrypoint = "Start",
@@ -45,22 +45,22 @@ var value = PigeonParser.Parse(input, new PigeonParser.ParserOptions
 });
 ```
 
-`PigeonParseException` provides `Position` and `Expected`.
+`PTParseException` provides `Position` and `Expected`.
 
 ## C99
 
 ```c
-PigeonParserOptions options = {0};
+PegtoolParserOptions options = {0};
 options.filename = "input.txt";
 options.entrypoint = "Start";
 options.max_expressions = 1000000;
 
-PigeonResult result = pigeon_parse_with_options(input, &options);
+PegtoolResult result = pegtool_parse_with_options(input, &options);
 /* Consume result.value or result.error. */
-pigeon_result_free(&result);
+pegtool_result_free(&result);
 ```
 
-`PigeonResult` owns its value or error. The caller is always responsible for freeing it.
+`PegtoolResult` owns its value or error. The caller is always responsible for freeing it.
 
 ## Rust
 
@@ -72,7 +72,7 @@ let options = ParserOptions {
     custom_data: None,
 };
 
-let value = PigeonParser::parse_with_options(input, options)?;
+let value = PTParser::parse_with_options(input, options)?;
 ```
 
 Results use the `Value` enum rather than relying on `Any` to infer primitive types.

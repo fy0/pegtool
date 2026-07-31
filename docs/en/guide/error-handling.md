@@ -2,7 +2,7 @@
 
 By default, a PEG can report only which matchers were expected at the farthest failure position. After a complex grammar passes through many choices and backtracking paths, that list often reflects the parser's internal route more than an error a user can understand. Replacing such messages in upstream Pigeon generally requires predicates or recovery expressions throughout the grammar, or parsing internal errors after a parse, all of which are expensive to maintain.
 
-Pegtool preserves position and `expected` data while adding a parser-level no-match formatter for Go and Haxe. Applications can produce user-facing messages without modifying the generated runtime or scattering error text throughout the grammar.
+pegtool preserves position and `expected` data while adding a parser-level no-match formatter for Go and Haxe. Applications can produce user-facing messages without modifying the generated runtime or scattering error text throughout the grammar.
 
 ## Go: `noMatchErrorFormatter`
 
@@ -69,10 +69,10 @@ The Haxe formatter also remains available in output generated with `-optimize-pa
 
 | Target | Available data |
 | --- | --- |
-| TypeScript | `PigeonParseError.position`, `expected` |
-| C# | `PigeonParseException.Position`, `Expected` |
+| TypeScript | `PTParseError.position`, `expected` |
+| C# | `PTParseException.Position`, `Expected` |
 | Rust | `ParseError.position`, `expected` |
-| C99 | `PigeonResult.error`, `position` |
+| C99 | `PegtoolResult.error`, `position` |
 
 Applications can turn these structured errors into localized messages at their boundaries. These targets do not currently provide the same formatter option as Go and Haxe.
 

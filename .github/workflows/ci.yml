@@ -42,4 +42,4 @@ jobs:
       #   run: go test -v -cover ./...
 
       - name: Build
-        run: go build -ldflags "-s -w" -trimpath -o pigeon .
+        run: go build -ldflags "-s -w" -trimpath -o pegtool .

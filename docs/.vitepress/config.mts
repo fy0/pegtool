@@ -110,7 +110,7 @@ const zhThemeConfig = {
   },
   footer: {
     message: "基于 BSD 3-Clause License 发布",
-    copyright: "Pegtool 文档",
+    copyright: "pegtool 文档",
   },
 } satisfies DefaultTheme.Config;
 
@@ -180,12 +180,12 @@ const enThemeConfig = {
   },
   footer: {
     message: "Released under the BSD 3-Clause License",
-    copyright: "Pegtool Documentation",
+    copyright: "pegtool Documentation",
   },
 } satisfies DefaultTheme.Config;
 
 export default defineConfig({
-  title: "Pegtool",
+  title: "pegtool",
   locales: {
     root: {
       label: "简体中文",
@@ -215,7 +215,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: "/pegtool-mark.svg",
-    siteTitle: "Pegtool",
+    siteTitle: "pegtool",
     search: {
       provider: "local",
       options: {
@@ -258,7 +258,7 @@ export default defineConfig({
       },
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/fy0/pigeon" },
+      { icon: "github", link: "https://github.com/fy0/pegtool" },
     ],
   },
 });

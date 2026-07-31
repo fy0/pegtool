@@ -13,13 +13,13 @@ import (
 
 	"golang.org/x/tools/imports"
 
-	"github.com/fy0/pigeon/ast"
-	builderGo "github.com/fy0/pigeon/builder"
-	builderC "github.com/fy0/pigeon/builder_c"
-	builderCs "github.com/fy0/pigeon/builder_cs"
-	builderHx "github.com/fy0/pigeon/builder_hx"
-	builderRust "github.com/fy0/pigeon/builder_rust"
-	builderTs "github.com/fy0/pigeon/builder_ts"
+	"github.com/fy0/pegtool/ast"
+	builderGo "github.com/fy0/pegtool/builder"
+	builderC "github.com/fy0/pegtool/builder_c"
+	builderCs "github.com/fy0/pegtool/builder_cs"
+	builderHx "github.com/fy0/pegtool/builder_hx"
+	builderRust "github.com/fy0/pegtool/builder_rust"
+	builderTs "github.com/fy0/pegtool/builder_ts"
 )
 
 // exit function mockable for tests
@@ -249,9 +249,9 @@ func parserBuilderForTarget(target string) (parserBuilder, bool, error) {
 
 var usagePage = `usage: %s [options] [GRAMMAR_FILE]
 
-Pigeon generates a parser based on a PEG grammar.
+pegtool generates a parser based on a PEG grammar.
 
-By default, pigeon reads the grammar from stdin and writes the
+By default, pegtool reads the grammar from stdin and writes the
 generated parser to stdout. If GRAMMAR_FILE is specified, the
 grammar is read from this file instead. If the -o flag is set,
 the generated code is written to this file instead.
@@ -299,8 +299,7 @@ the generated code is written to this file instead.
 	-t TARGET, -target TARGET
 		build target: go, hx, ts, cs, c, or rust. Defaults to go.
 
-See https://godoc.org/github.com/mna/pigeon for more information.
-This version is a fork: https://github.com/fy0/pigeon
+See https://pkg.go.dev/github.com/fy0/pegtool for more information.
 `
 
 // usage prints the help page of the command-line tool.

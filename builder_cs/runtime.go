@@ -37,9 +37,9 @@ public sealed class ParserOptions
     public long MaxExpressions { get; set; } = int.MaxValue;
 }
 
-public sealed class PigeonParseException : Exception
+public sealed class PTParseException : Exception
 {
-    internal PigeonParseException(string message, Position position, IReadOnlyList<string>? expected = null)
+    internal PTParseException(string message, Position position, IReadOnlyList<string>? expected = null)
         : base(message)
     {
         Position = position;
@@ -108,8 +108,8 @@ private sealed class Expr
     public ExprKind Kind;
     public Expr? Inner;
     public List<Expr>? Items;
-    public Func<PigeonParser, object?>? ActionRun;
-    public Func<PigeonParser, bool>? PredicateRun;
+    public Func<PTParser, object?>? ActionRun;
+    public Func<PTParser, bool>? PredicateRun;
     public Expr? RecoverExpr;
     public List<string>? FailureLabels;
     public string? Label;
@@ -164,7 +164,7 @@ private readonly List<string> maxFailExpected = new List<string>();
 private long expressionCount;
 private readonly List<Dictionary<string, object?>> vstack = new List<Dictionary<string, object?>>();
 
-public PigeonParser(string filename, string input, ParserOptions? options = null)
+public PTParser(string filename, string input, ParserOptions? options = null)
 {
     options ??= new ParserOptions();
     this.filename = filename;
@@ -181,7 +181,7 @@ public Current Cur { get; }
 public static object? Parse(string input, ParserOptions? options = null)
 {
     options ??= new ParserOptions();
-    return new PigeonParser(options.Filename ?? string.Empty, input, options).Parse();
+    return new PTParser(options.Filename ?? string.Empty, input, options).Parse();
 }
 
 public object? Parse()
@@ -198,7 +198,7 @@ private object? ParseGrammar(Grammar grammar)
 {
     if (grammar.Rules.Count == 0)
     {
-        throw new PigeonParseException("grammar has no rule", PublicPosition(pt));
+        throw new PTParseException("grammar has no rule", PublicPosition(pt));
     }
 
     rulesArray = grammar.Rules;
@@ -209,7 +209,7 @@ private object? ParseGrammar(Grammar grammar)
 
     if (!rules.TryGetValue(entrypoint, out var start))
     {
-        throw new PigeonParseException("invalid entrypoint", PublicPosition(pt));
+        throw new PTParseException("invalid entrypoint", PublicPosition(pt));
     }
 
     Match result;
@@ -232,7 +232,7 @@ private object? ParseGrammar(Grammar grammar)
         }
         var position = PublicPosition(maxFailPos);
         var prefix = filename.Length == 0 ? string.Empty : filename + ":";
-        errors.Add(new PigeonParseException(
+        errors.Add(new PTParseException(
             prefix + position.Line + ":" + position.Col + ": no match found, expected: " + string.Join(", ", expected),
             position,
             expected));

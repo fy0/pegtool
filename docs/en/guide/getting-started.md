@@ -1,13 +1,13 @@
 # Quick Start
 
-Pegtool is written in Go. The examples below use `pegtool` as the command name.
+pegtool is written in Go. The examples below use `pegtool` as the command name.
 
 ## Installation
 
 Install the latest version from the Go module:
 
 ```powershell
-go install github.com/fy0/pigeon@latest
+go install github.com/fy0/pegtool@latest
 pegtool -h
 ```
 

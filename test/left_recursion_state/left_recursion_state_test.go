@@ -3,8 +3,8 @@ package leftrecursionstate_test
 import (
 	"testing"
 
-	optimizedleftrecursionstate "github.com/fy0/pigeon/test/left_recursion_state/optimized"
-	leftrecursionstate "github.com/fy0/pigeon/test/left_recursion_state/standart"
+	optimizedleftrecursionstate "github.com/fy0/pegtool/test/left_recursion_state/optimized"
+	leftrecursionstate "github.com/fy0/pegtool/test/left_recursion_state/standart"
 )
 
 func TestLeftRecursionWithState(t *testing.T) {

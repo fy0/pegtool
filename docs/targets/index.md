@@ -1,6 +1,6 @@
 # 目标语言概览
 
-Pegtool 共享同一套 PEG 结构语义，但 initializer、action、predicate 和公开调用方式属于目标语言。生成前先确定部署目标，再编写对应的宿主代码。
+pegtool 共享同一套 PEG 结构语义，但 initializer、action、predicate 和公开调用方式属于目标语言。生成前先确定部署目标，再编写对应的宿主代码。
 
 ## 支持矩阵
 
@@ -9,9 +9,9 @@ Pegtool 共享同一套 PEG 结构语义，但 initializer、action、predicate 
 | Go | `go` | 由 initializer 包装包内 `parse` | `any` | 支持 |
 | Haxe | `hx`、`haxe` | `new Parser(...).parse(...)` | `Any` | 支持，但与 `-optimize-parser` 互斥 |
 | TypeScript | `ts`、`typescript` | `parse`、`Parser` | `any` | 不支持 |
-| C# | `cs`、`csharp`、`c#` | `PigeonParser.Parse` | `object?` | 不支持 |
-| C99 | `c`、`c99` | `pigeon_parse*` | `PigeonValue` | 不支持 |
-| Rust | `rust` | `PigeonParser::parse*` | `Value` | 不支持 |
+| C# | `cs`、`csharp`、`c#` | `PTParser.Parse` | `object?` | 不支持 |
+| C99 | `c`、`c99` | `pegtool_parse*` | `PegtoolValue` | 不支持 |
+| Rust | `rust` | `PTParser::parse*` | `Value` | 不支持 |
 
 每个完整生成物默认只使用目标语言标准库。Haxe 只有在显式使用 `-haxe-use-hxunicode` 且文法包含 Unicode class 时需要 `hxUnicode`。
 

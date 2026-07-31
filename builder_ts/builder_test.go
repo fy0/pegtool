@@ -9,9 +9,9 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/fy0/pigeon/ast"
-	"github.com/fy0/pigeon/bootstrap"
-	base "github.com/fy0/pigeon/builder"
+	"github.com/fy0/pegtool/ast"
+	"github.com/fy0/pegtool/bootstrap"
+	base "github.com/fy0/pegtool/builder"
 )
 
 func TestUnicodeClassRangesAreFlatInlineAndDeterministic(t *testing.T) {
