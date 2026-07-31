@@ -77,6 +77,10 @@ npm run docs:dev
 
 Treat `docs:build` as the release check. It writes output to `docs/.vitepress/dist/`, which is not committed to Git.
 
+Pull requests that change the documentation run the same production build in
+GitHub Actions. A documentation change pushed to `main` is built and deployed to
+GitHub Pages automatically by the `Deploy documentation` workflow.
+
 ## Before committing
 
 1. Format Go code and run goimports.

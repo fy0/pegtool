@@ -77,6 +77,9 @@ npm run docs:dev
 
 发布前以 `docs:build` 为准；输出位于 `docs/.vitepress/dist/`，不会提交到 Git。
 
+修改文档的 pull request 会在 GitHub Actions 中执行同一套生产构建。文档改动推送到
+`main` 后，`Deploy documentation` workflow 会自动构建并发布到 GitHub Pages。
+
 ## 提交前
 
 1. 格式化 Go 代码并运行 goimports。

@@ -2,6 +2,24 @@
   const storageKey = "pegtool-language";
   const english = "en";
   const chinese = "zh";
+  const scriptSuffix = "/locale-preference.js";
+  const scriptPath = new URL(
+    document.currentScript?.src || window.location.href,
+    window.location.href,
+  ).pathname;
+  const basePath = scriptPath.endsWith(scriptSuffix)
+    ? scriptPath.slice(0, -scriptSuffix.length)
+    : "";
+
+  function stripBase(pathname) {
+    if (basePath && pathname === basePath) {
+      return "/";
+    }
+    if (basePath && pathname.startsWith(`${basePath}/`)) {
+      return pathname.slice(basePath.length);
+    }
+    return pathname;
+  }
 
   function readPreference() {
     try {
@@ -21,7 +39,8 @@
   }
 
   function localeFromPath(pathname) {
-    return pathname === "/en" || pathname.startsWith("/en/")
+    const relativePath = stripBase(pathname);
+    return relativePath === "/en" || relativePath.startsWith("/en/")
       ? english
       : chinese;
   }
@@ -47,7 +66,8 @@
   }
 
   const pathname = window.location.pathname;
-  const isRoot = pathname === "/" || pathname === "/index.html";
+  const relativePath = stripBase(pathname);
+  const isRoot = relativePath === "/" || relativePath === "/index.html";
   const storedPreference = readPreference();
 
   if (isRoot) {
@@ -56,7 +76,7 @@
 
     if (preferredLocale === english) {
       window.location.replace(
-        `/en/${window.location.search}${window.location.hash}`,
+        `${basePath}/en/${window.location.search}${window.location.hash}`,
       );
     }
   } else if (!storedPreference) {

@@ -185,6 +185,7 @@ const enThemeConfig = {
 } satisfies DefaultTheme.Config;
 
 export default defineConfig({
+  base: "/pegtool/",
   title: "pegtool",
   locales: {
     root: {
@@ -205,9 +206,16 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   head: [
-    ["link", { rel: "icon", type: "image/svg+xml", href: "/pegtool-mark.svg" }],
+    [
+      "link",
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/pegtool/pegtool-mark.svg",
+      },
+    ],
     ["meta", { name: "theme-color", content: "#0f766e" }],
-    ["script", { src: "/locale-preference.js" }],
+    ["script", { src: "/pegtool/locale-preference.js" }],
   ],
   markdown: {
     lineNumbers: true,
