@@ -388,6 +388,20 @@ type resultTuple struct {
 	end savepoint
 }
 
+type recoveryMemoKey struct {
+	offset int
+	rule   *rule
+}
+
+// recoveryFrame isolates memo entries whose throw behavior depends on the
+// active recovery stack. Sparse tables avoid an input-sized allocation for
+// every nested recovery expression.
+type recoveryFrame struct {
+	handlers map[string]any
+	memo1    map[recoveryMemoKey]*resultTuple
+	memo2    map[recoveryMemoKey]*resultTuple
+}
+
 // Leave room for Go's malloc header so each pointerful block fits in 8 KiB.
 const memoBlockSize = 127
 
@@ -464,7 +478,7 @@ type parser struct {
 
 	choiceNoMatch string
 	// recovery expression stack, keeps track of the currently available recovery expression, these are traversed in reverse
-	recoveryStack []map[string]any
+	recoveryStack []recoveryFrame
 
 	_errPos *position
 	// skip code stack
@@ -556,27 +570,18 @@ func (p *parser) popV() {
 
 // push a recovery expression with its labels to the recoveryStack
 func (p *parser) pushRecovery(labels []string, expr any) {
-	if cap(p.recoveryStack) == len(p.recoveryStack) {
-		// create new empty slot in the stack
-		p.recoveryStack = append(p.recoveryStack, nil)
-	} else {
-		// slice to 1 more
-		p.recoveryStack = p.recoveryStack[:len(p.recoveryStack)+1]
-	}
-
 	m := make(map[string]any, len(labels))
 	for _, fl := range labels {
 		m[fl] = expr
 	}
-	p.recoveryStack[len(p.recoveryStack)-1] = m
+	p.recoveryStack = append(p.recoveryStack, recoveryFrame{handlers: m})
 }
 
 // pop a recovery expression from the recoveryStack
 func (p *parser) popRecovery() {
-	// GC that map
-	p.recoveryStack[len(p.recoveryStack)-1] = nil
-
-	p.recoveryStack = p.recoveryStack[:len(p.recoveryStack)-1]
+	last := len(p.recoveryStack) - 1
+	p.recoveryStack[last] = recoveryFrame{}
+	p.recoveryStack = p.recoveryStack[:last]
 }
 
 // ==template== {{ if not .Optimize }}
@@ -882,32 +887,53 @@ func (p *parser) parseRuleWrap(r *rule) (any, bool) {
 	p.rstack = append(p.rstack, r)
 	skipCode := p.checkSkipCode()
 	var memo []map[*rule]*resultTuple
+	var recoveryMemo map[recoveryMemoKey]*resultTuple
+	var recoveryKey recoveryMemoKey
+	var cached *resultTuple
 	if p.memoized {
-		if skipCode {
-			if p.memo2 == nil {
-				p.memo2 = make([]map[*rule]*resultTuple, len(p.data)+1)
+		if len(p.recoveryStack) > 0 {
+			frame := &p.recoveryStack[len(p.recoveryStack)-1]
+			if skipCode {
+				if frame.memo2 == nil {
+					frame.memo2 = make(map[recoveryMemoKey]*resultTuple)
+				}
+				recoveryMemo = frame.memo2
+			} else {
+				if frame.memo1 == nil {
+					frame.memo1 = make(map[recoveryMemoKey]*resultTuple)
+				}
+				recoveryMemo = frame.memo1
 			}
-			memo = p.memo2
+			recoveryKey = recoveryMemoKey{p.pt.offset, r}
+			cached = recoveryMemo[recoveryKey]
 		} else {
-			if p.memo1 == nil {
-				p.memo1 = make([]map[*rule]*resultTuple, len(p.data)+1)
+			if skipCode {
+				if p.memo2 == nil {
+					p.memo2 = make([]map[*rule]*resultTuple, len(p.data)+1)
+				}
+				memo = p.memo2
+			} else {
+				if p.memo1 == nil {
+					p.memo1 = make([]map[*rule]*resultTuple, len(p.data)+1)
+				}
+				memo = p.memo1
 			}
-			memo = p.memo1
+			cached = memo[p.pt.offset][r]
 		}
-		if result := memo[p.pt.offset][r]; result != nil {
+		if cached != nil {
 			// A rule cache hit still represents its root expression.
 			p.ExprCnt++
 			if p.ExprCnt > p.maxExprCnt {
 				panic(errMaxExprCnt)
 			}
-			p.restore(&result.end)
+			p.restore(&cached.end)
 			p.rstack = p.rstack[:len(p.rstack)-1]
 			// ==template== {{ if not .Optimize }}
-			if result.b && p.debug {
+			if cached.b && p.debug {
 				p.printIndent("MATCH", string(p.sliceFrom(startMark)))
 			}
 			// {{ end }} ==template==
-			return result.v, result.b
+			return cached.v, cached.b
 		}
 	}
 	pos := p.pt.offset
@@ -929,15 +955,23 @@ func (p *parser) parseRuleWrap(r *rule) (any, bool) {
 	// {{ end }} ==template==
 
 	if p.memoized {
-		entries := memo[pos]
-		if entries == nil {
-			entries = make(map[*rule]*resultTuple)
-			memo[pos] = entries
-		}
-		if result := entries[r]; result != nil {
-			*result = resultTuple{val, ok, p.pt}
+		if recoveryMemo != nil {
+			if result := recoveryMemo[recoveryKey]; result != nil {
+				*result = resultTuple{val, ok, p.pt}
+			} else {
+				recoveryMemo[recoveryKey] = p.newMemoizedResult(val, ok)
+			}
 		} else {
-			entries[r] = p.newMemoizedResult(val, ok)
+			entries := memo[pos]
+			if entries == nil {
+				entries = make(map[*rule]*resultTuple)
+				memo[pos] = entries
+			}
+			if result := entries[r]; result != nil {
+				*result = resultTuple{val, ok, p.pt}
+			} else {
+				entries[r] = p.newMemoizedResult(val, ok)
+			}
 		}
 	}
 	p.rstack = p.rstack[:len(p.rstack)-1]
@@ -1423,7 +1457,7 @@ func (p *parser) parseThrowExpr(expr *throwExpr) (any, bool) {
 
 	// {{ end }} ==template==
 	for i := len(p.recoveryStack) - 1; i >= 0; i-- {
-		if recoverExpr, ok := p.recoveryStack[i][expr.label]; ok {
+		if recoverExpr, ok := p.recoveryStack[i].handlers[expr.label]; ok {
 			if val, ok := p.parseExprWrap(recoverExpr); ok {
 				return val, ok
 			}
