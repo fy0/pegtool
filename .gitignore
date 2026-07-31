@@ -17,6 +17,12 @@ bootstrap/cmd/bootstrap-build/bootstrap-build
 bootstrap/cmd/pegscan/pegscan
 bootstrap/cmd/pegparse/pegparse
 
+# Pegtool documentation
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+internal-reports/
+
 # Test binary, build with `go test -c`
 *.test
 
