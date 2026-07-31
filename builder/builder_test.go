@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fy0/pigeon/ast"
 	"github.com/fy0/pigeon/bootstrap"
 )
 
@@ -104,7 +105,8 @@ func TestBuildParserMemoizesNamedRulesWithAllocationEfficientTable(t *testing.T)
 		"memoBlocks  []*[memoBlockSize]resultTuple",
 		"func (p *parser) newMemoizedResult(val any, ok bool) *resultTuple",
 		"p.memo1 = make([]map[*rule]*resultTuple, len(p.data)+1)",
-		"if result := memo[p.pt.offset][r]; result != nil",
+		"recoveryKey = recoveryMemoKey{p.pt.offset, r}",
+		"cached = memo[p.pt.offset][r]",
 		"entries = make(map[*rule]*resultTuple)",
 		"A rule cache hit still represents its root expression.",
 	} {
@@ -157,10 +159,48 @@ diagnostic = word "x" / word "y"
 word = [a-w]+ { actionCalls++; return string(c.text) }
 limit = atom "x" / atom "y"
 atom = "a"
+statistics = (choice "x" / choice "y") !.
+choice = "a" / "b"
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	pos := ast.Pos{Filename: "memo.peg", Line: 1, Col: 1}
+	ruleRef := func(name string) *ast.RuleRefExpr {
+		ref := ast.NewRuleRefExpr(pos)
+		ref.Name = ast.NewIdentifier(pos, name)
+		return ref
+	}
+	rule := func(name string, expr ast.Expression) *ast.Rule {
+		r := ast.NewRule(pos, ast.NewIdentifier(pos, name))
+		r.Expr = expr
+		return r
+	}
+	recovery := func(literal string) *ast.RecoveryExpr {
+		expr := ast.NewRecoveryExpr(pos)
+		expr.Expr = ruleRef("throwing")
+		expr.RecoverExpr = ast.NewLitMatcher(pos, literal)
+		expr.Labels = []ast.FailureLabel{"expected"}
+		return expr
+	}
+	throwing := ast.NewThrowExpr(pos)
+	throwing.Label = "expected"
+	firstAlternative := ast.NewSeqExpr(pos)
+	firstAlternative.Exprs = []ast.Expression{ruleRef("recoverA"), ast.NewLitMatcher(pos, "x")}
+	recoveryContext := ast.NewChoiceExpr(pos)
+	recoveryContext.Alternatives = []ast.Expression{firstAlternative, ruleRef("recoverB")}
+	recoveryMemo := ast.NewRecoveryExpr(pos)
+	recoveryMemo.Expr = ruleRef("start")
+	recoveryMemo.RecoverExpr = ast.NewLitMatcher(pos, "fallback")
+	recoveryMemo.Labels = []ast.FailureLabel{"expected"}
+	g.Rules = append(g.Rules,
+		rule("recoveryContext", recoveryContext),
+		rule("recoveryMemo", recoveryMemo),
+		rule("recoverA", recovery("a")),
+		rule("recoverB", recovery("b")),
+		rule("throwing", throwing),
+	)
 
 	generatedTest := []byte(`package generated
 
@@ -260,6 +300,61 @@ func TestNamedRuleMemoization(t *testing.T) {
 	if _, err := limited.parse(g); err == nil || !strings.Contains(err.Error(), "max number of expressions") {
 		t.Fatalf("expression limit did not include a rule cache hit: %v", err)
 	}
+
+	for _, tc := range []struct {
+		input   string
+		wantErr bool
+	}{
+		{input: "b"},
+		{input: "a", wantErr: true},
+	} {
+		_, _, memoErr := parseEntry("recoveryContext", tc.input, true)
+		_, _, plainErr := parseEntry("recoveryContext", tc.input, false)
+		if (memoErr != nil) != tc.wantErr || (plainErr != nil) != tc.wantErr {
+			t.Fatalf("recovery context mismatch for %q: memo=%v plain=%v wantErr=%t", tc.input, memoErr, plainErr, tc.wantErr)
+		}
+	}
+
+	value, _, err = parseEntry("recoveryMemo", "abcy", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 1 {
+		t.Fatalf("memoized recovery-frame action calls = %v, want 1", value)
+	}
+	value, _, err = parseEntry("recoveryMemo", "abcy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 2 {
+		t.Fatalf("plain recovery-frame action calls = %v, want 2", value)
+	}
+}
+`)
+
+	generatedStatisticsTest := []byte(`package generated
+
+import "testing"
+
+func TestNamedRuleMemoizationStatistics(t *testing.T) {
+	parse := func(useMemo bool) *Stats {
+		stats := &Stats{}
+		p := newParser("memo.peg", []byte("ay"), memoized(useMemo), statistics(stats, "no match"))
+		p.entrypoint = "statistics"
+		if _, err := p.parse(g); err != nil {
+			t.Fatal(err)
+		}
+		return stats
+	}
+
+	memoStats := parse(true)
+	plainStats := parse(false)
+	if got := memoStats.ChoiceAltCnt["choice"]["1"]; got != 1 {
+		t.Fatalf("memoized choice count = %d, want 1", got)
+	}
+	if got := plainStats.ChoiceAltCnt["choice"]["1"]; got != 2 {
+		t.Fatalf("plain choice count = %d, want 2", got)
+	}
 }
 `)
 
@@ -284,11 +379,15 @@ func TestNamedRuleMemoization(t *testing.T) {
 			}
 
 			dir := t.TempDir()
-			for name, data := range map[string][]byte{
+			files := map[string][]byte{
 				"go.mod":         []byte("module generated\n\ngo 1.25.0\n"),
 				"parser.go":      first.Bytes(),
 				"parser_test.go": generatedTest,
-			} {
+			}
+			if tc.name == "standard" {
+				files["statistics_test.go"] = generatedStatisticsTest
+			}
+			for name, data := range files {
 				if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
 					t.Fatal(err)
 				}

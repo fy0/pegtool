@@ -5,23 +5,29 @@ import (
 	"testing"
 )
 
-func TestWalkRecoveryAndThrowExpressions(t *testing.T) {
-	expr := &RecoveryExpr{
-		Expr:        &LitMatcher{},
-		RecoverExpr: &ThrowExpr{},
-	}
+func TestInspectRecoveryAndThrowExpressions(t *testing.T) {
+	pos := Pos{Line: 1, Col: 1}
+	regular := NewThrowExpr(pos)
+	regular.Label = "expected"
+	recovery := NewRecoveryExpr(pos)
+	recovery.Expr = regular
+	recovery.RecoverExpr = NewLitMatcher(pos, "fallback")
 
 	var visited []string
-	Inspect(expr, func(expr Expression) bool {
-		if expr == nil {
-			return false
+	Inspect(recovery, func(expr Expression) bool {
+		switch expr.(type) {
+		case *RecoveryExpr:
+			visited = append(visited, "recovery")
+		case *ThrowExpr:
+			visited = append(visited, "throw")
+		case *LitMatcher:
+			visited = append(visited, "literal")
 		}
-		visited = append(visited, reflect.TypeOf(expr).String())
 		return true
 	})
 
-	want := []string{"*ast.RecoveryExpr", "*ast.LitMatcher", "*ast.ThrowExpr"}
+	want := []string{"recovery", "throw", "literal"}
 	if !reflect.DeepEqual(visited, want) {
-		t.Fatalf("unexpected walk order: want %v, got %v", want, visited)
+		t.Fatalf("visited expressions = %v, want %v", visited, want)
 	}
 }
