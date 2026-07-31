@@ -15,6 +15,7 @@ import (
 
 	"github.com/fy0/pigeon/ast"
 	builderGo "github.com/fy0/pigeon/builder"
+	builderC "github.com/fy0/pigeon/builder_c"
 	builderCs "github.com/fy0/pigeon/builder_cs"
 	builderHx "github.com/fy0/pigeon/builder_hx"
 	builderRust "github.com/fy0/pigeon/builder_rust"
@@ -234,11 +235,13 @@ func parserBuilderForTarget(target string) (parserBuilder, bool, error) {
 		return builderTs.BuildParser, false, nil
 	case "cs", "csharp", "c#":
 		return builderCs.BuildParser, false, nil
+	case "c", "c99":
+		return builderC.BuildParser, false, nil
 	case "rust":
 		return builderRust.BuildParser, false, nil
 	default:
 		return nil, false, fmt.Errorf(
-			"unknown build target %q (supported: go, hx, ts, cs, rust)",
+			"unknown build target %q (supported: go, hx, ts, cs, c, rust)",
 			target,
 		)
 	}
@@ -294,7 +297,7 @@ the generated code is written to this file instead.
 	-run-func-prefix
 		set prefix for generated function name: "(*parser).call_onXXX". For multiple peg files
 	-t TARGET, -target TARGET
-		build target: go, hx, ts, cs, or rust. Defaults to go.
+		build target: go, hx, ts, cs, c, or rust. Defaults to go.
 
 See https://godoc.org/github.com/mna/pigeon for more information.
 This version is a fork: https://github.com/fy0/pigeon

@@ -108,22 +108,27 @@ pigeon -t go   -o parser.go grammar.peg
 pigeon -t hx   -o Parser.hx grammar.peg
 pigeon -t ts   -o parser.ts grammar.peg
 pigeon -t cs   -o Parser.cs grammar.peg
+pigeon -t c    -o parser.c grammar.peg
 pigeon -t rust -o parser.rs grammar.peg
 ```
 
-The long aliases `typescript`, `csharp`, `c#`, and `haxe` are also accepted. Grammar templates receive the canonical target values `go`, `haxe`, `ts`, `cs`, and `rust`, so one grammar can contain target-specific initializer and action code:
+The aliases `typescript`, `csharp`, `c#`, `haxe`, and `c99` are also accepted. Grammar templates receive the canonical target values `go`, `haxe`, `ts`, `cs`, `c`, and `rust`, so one grammar can contain target-specific initializer and action code:
 
 ```text
 {{ if eq .Target "ts" }}
 // TypeScript code
 {{ else if eq .Target "cs" }}
 // C# code
+{{ else if eq .Target "c" }}
+/* C99 code */
 {{ else if eq .Target "rust" }}
 // Rust code
 {{ end }}
 ```
 
 The generated TypeScript module exports `parse`, `Parser`, and `ParserOptions`. The C# source exposes `PigeonParser.Parse` and `PigeonParser.ParserOptions`. Rust exposes `PigeonParser::parse`, `PigeonParser::parse_with_options`, and the cloneable `Value` enum used by action labels and return values.
+
+The C target emits portable C99 and exposes `pigeon_parse`, `pigeon_parse_n`, and their `PigeonParserOptions` variants. Parse calls return an owned `PigeonResult`; release both successful values and errors with `pigeon_result_free`. C action labels are `const PigeonValue *`; labels that are C99 keywords or collide with the internal `p` parameter or current-match variable use `_pigeon_label_<name>` in action code. The current match is available as `PigeonCurrent *c` by default and can be renamed with `-receiver-name`. Actions return an owned `PigeonValue` built with functions such as `pigeon_value_string`, `pigeon_value_integer`, or `pigeon_value_clone`. Semantic predicates return an `int`. The generated source uses only the C standard library and can be compiled with `cc -std=c99 parser.c`.
 
 Generated Haxe parsers embed only the Unicode tables used by the grammar and have no Haxe library dependency by default. Pass `-haxe-use-hxunicode` to keep parsers with Unicode character classes smaller; in that mode, install the dependency with `haxelib install hxUnicode` and compile with `-lib hxUnicode`. The generated source reports these commands directly if the library is missing.
 

@@ -38,6 +38,8 @@ func TestMain(t *testing.T) {
 		{args: []string{"-target", "hx", "-haxe-use-hxunicode", "-x", grammarFile}},
 		{args: []string{"-t", "ts", "-x", grammarFile}},
 		{args: []string{"-t", "cs", "-x", grammarFile}},
+		{args: []string{"-t", "c", "-x", grammarFile}},
+		{args: []string{"-t", "c99", "-x", grammarFile}},
 		{args: []string{"-t", "rust", "-x", grammarFile}},
 		{args: []string{"-t", "unknown", "-x", grammarFile}, code: 1},
 	}
@@ -54,7 +56,7 @@ func TestMain(t *testing.T) {
 
 func TestParserBuilderForTarget(t *testing.T) {
 	for _, target := range []string{
-		"go", "hx", "haxe", "ts", "typescript", "cs", "csharp", "c#", "rust",
+		"go", "hx", "haxe", "ts", "typescript", "cs", "csharp", "c#", "c", "c99", "rust",
 	} {
 		builder, formatGo, err := parserBuilderForTarget(target)
 		if err != nil {

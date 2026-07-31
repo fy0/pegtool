@@ -1,0 +1,25 @@
+{
+{{ if eq .Target "c" }}
+#define PIGEON_EXTENSION_TARGET_C 1
+{{ else }}
+#error incorrect target template value
+{{ end }}
+}
+
+start <- predicateAnd
+
+predicateAnd <- &{ return 1; } "a" !.
+
+predicateNot <- !{ return 0; } "b" !.
+
+codeProbe <- *{ return pigeon_value_null(); } !.
+
+recoveryProbe <- %{fallback} //{fallback} "x" !.
+
+actionProbe <- value:<"x"> !. { return pigeon_value_clone(value); }
+
+keywordLabel <- typedef:<"x"> !. { return pigeon_value_clone(_pigeon_label_typedef); }
+
+receiverLabel <- c:<"x"> !. { return pigeon_value_clone(_pigeon_label_c); }
+
+parserLabel <- p:<"x"> !. { return pigeon_value_clone(_pigeon_label_p); }
