@@ -1,0 +1,7 @@
+{
+const operators = new Set(["+", "%"]);
+}
+
+op = value:<[^ \n\t\ra-zA-Z0-9]+>
+  &{ return operators.has(value as string); }
+  { return c.text; }

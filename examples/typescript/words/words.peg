@@ -1,0 +1,13 @@
+{
+type WordList = string[];
+}
+
+start = first:word rest:("," next:word { return next; })* !. {
+  const values: WordList = [first as string];
+  for (const item of ((rest ?? []) as any[])) {
+    values.push(item as string);
+  }
+  return values;
+}
+
+word = [\p{L}]+ { return c.text; }

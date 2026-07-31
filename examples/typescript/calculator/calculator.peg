@@ -1,0 +1,43 @@
+{
+function evaluate(first: any, rest: any): number {
+  let result = first as number;
+  for (const pair of ((rest ?? []) as any[][])) {
+    const right = pair[1] as number;
+    switch (pair[0] as string) {
+      case "+": result += right; break;
+      case "-": result -= right; break;
+      case "*": result *= right; break;
+      case "/": result = Math.trunc(result / right); break;
+      default: throw new Error("unknown operator " + String(pair[0]));
+    }
+  }
+  return result;
+}
+}
+
+Input = expression:Expr EOF { return expression; }
+
+Expr = _ first:Term rest:( _ operator:AddOp _ right:Term {
+  return [operator, right];
+})* _ {
+  return evaluate(first, rest);
+}
+
+Term = first:Factor rest:( _ operator:MulOp _ right:Factor {
+  return [operator, right];
+})* {
+  return evaluate(first, rest);
+}
+
+Factor = '(' expression:Expr ')' { return expression; }
+       / integer:Integer { return integer; }
+
+AddOp = ('+' / '-') { return c.text; }
+
+MulOp = ('*' / '/') { return c.text; }
+
+Integer = '-'? [0-9]+ { return Number.parseInt(c.text, 10); }
+
+_ "whitespace" = [ \n\t\r]*
+
+EOF = !.

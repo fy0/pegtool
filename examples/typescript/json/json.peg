@@ -1,0 +1,75 @@
+{
+function objectValue(members: any): Record<string, any> {
+  const result: Record<string, any> = {};
+  if (members == null) return result;
+  const values = members as [any[], any[] | null];
+  const insert = (pair: any[]) => { result[pair[0] as string] = pair[1]; };
+  insert(values[0]);
+  for (const member of (values[1] ?? [])) insert(member as any[]);
+  return result;
+}
+
+function arrayValue(values: any): any[] {
+  const result: any[] = [];
+  if (values == null) return result;
+  const group = values as [any[], any[] | null];
+  result.push(group[0][0]);
+  for (const item of (group[1] ?? [])) result.push((item as any[])[0]);
+  return result;
+}
+}
+
+JSON = _ value:Value EOF { return value; }
+
+Value = value:(Object / Array / Number / String / Bool / Null) _ { return value; }
+
+Object = '{' _ members:(first:Member rest:(',' _ member:Member {
+  return member;
+})* {
+  return [first, rest];
+})? '}' {
+  return objectValue(members);
+}
+
+Member = key:String _ ':' _ value:Value { return [key, value]; }
+
+Array = '[' _ values:(first:(value:Value {
+  return [value];
+}) rest:(',' _ value:Value {
+  return [value];
+})* {
+  return [first, rest];
+})? ']' {
+  return arrayValue(values);
+}
+
+Number = '-'? Integer ('.' DecimalDigit+)? Exponent? { return Number.parseFloat(c.text); }
+
+Integer = '0' / NonZeroDecimalDigit DecimalDigit*
+
+Exponent = 'e'i [+-]? DecimalDigit+
+
+String = '"' (!EscapedChar . / '\\' EscapeSequence)* '"' { return JSON.parse(c.text); }
+
+EscapedChar = [\x00-\x1f"\\]
+
+EscapeSequence = SingleCharEscape / UnicodeEscape
+
+SingleCharEscape = ["\\/bfnrt]
+
+UnicodeEscape = 'u' HexDigit HexDigit HexDigit HexDigit
+
+DecimalDigit = [0-9]
+
+NonZeroDecimalDigit = [1-9]
+
+HexDigit = [0-9a-f]i
+
+Bool = "true" { return true; }
+     / "false" { return false; }
+
+Null = "null" { return null; }
+
+_ "whitespace" = [ \t\r\n]*
+
+EOF = !.

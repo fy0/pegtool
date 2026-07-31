@@ -1,0 +1,144 @@
+{
+type IndentationAst =
+  | { kind: "program"; statements: IndentationAst[]; returnName: string }
+  | { kind: "assignment"; name: string; value: IndentationAst }
+  | { kind: "if"; condition: IndentationAst; statements: IndentationAst[] }
+  | { kind: "integer"; value: number }
+  | { kind: "identifier"; name: string }
+  | { kind: "add"; left: IndentationAst; operator: string; right: IndentationAst };
+
+function ast(value: any): IndentationAst {
+  return value as IndentationAst;
+}
+
+function statements(values: any): IndentationAst[] {
+  return (values ?? []) as IndentationAst[];
+}
+
+function identifierName(value: any): string {
+  const node = ast(value);
+  if (node.kind !== "identifier") throw new Error("expected identifier");
+  return node.name;
+}
+
+function programValue(values: any, returnValue: any): IndentationAst {
+  return { kind: "program", statements: statements(values), returnName: identifierName(returnValue) };
+}
+
+function assignmentValue(name: any, value: any): IndentationAst {
+  return { kind: "assignment", name: identifierName(name), value: ast(value) };
+}
+
+function ifValue(condition: any, body: any): IndentationAst {
+  return { kind: "if", condition: ast(condition), statements: statements(body) };
+}
+
+function additiveValue(first: any, rest: any): IndentationAst {
+  let result = ast(first);
+  for (const pair of ((rest ?? []) as any[][])) {
+    result = { kind: "add", left: result, operator: pair[0] as string, right: ast(pair[1]) };
+  }
+  return result;
+}
+
+function evaluateExpression(value: IndentationAst, variables: Map<string, number>): number {
+  switch (value.kind) {
+    case "integer": return value.value;
+    case "identifier": {
+      const result = variables.get(value.name);
+      if (result === undefined) throw new Error("identifier " + value.name + " is not defined");
+      return result;
+    }
+    case "add": {
+      const left = evaluateExpression(value.left, variables);
+      const right = evaluateExpression(value.right, variables);
+      if (value.operator === "+") return left + right;
+      if (value.operator === "-") return left - right;
+      throw new Error("unknown operator " + value.operator);
+    }
+    default: throw new Error("expected expression");
+  }
+}
+
+function executeStatements(values: IndentationAst[], variables: Map<string, number>): void {
+  for (const statement of values) {
+    if (statement.kind === "assignment") {
+      variables.set(statement.name, evaluateExpression(statement.value, variables));
+    } else if (statement.kind === "if") {
+      if (evaluateExpression(statement.condition, variables) !== 0) {
+        executeStatements(statement.statements, variables);
+      }
+    } else {
+      throw new Error("expected statement");
+    }
+  }
+}
+
+export function execute(value: any): number {
+  const root = ast(value);
+  if (root.kind !== "program") throw new Error("expected program");
+  const variables = new Map<string, number>();
+  executeStatements(root.statements, variables);
+  const result = variables.get(root.returnName);
+  if (result === undefined) throw new Error("identifier " + root.returnName + " is not defined");
+  return result;
+}
+}
+
+Input = &{
+  c.data.indentation = 0;
+  return true;
+} values:Statements returnValue:ReturnOp EOF {
+  return programValue(values, returnValue);
+}
+
+Statements = values:Line+ { return statements(values); }
+
+Line = INDENTATION statement:Statement { return statement; }
+
+ReturnOp = "return" _ value:Identifier EOL { return value; }
+
+Statement = assignment:Assignment EOL { return assignment; }
+    / "if" _ condition:LogicalExpression _? ":" EOL INDENT body:Statements DEDENT {
+  return ifValue(condition, body);
+}
+
+Assignment = name:Identifier _? "=" _? value:AdditiveExpression {
+  return assignmentValue(name, value);
+}
+
+LogicalExpression = value:PrimaryExpression { return value; }
+
+AdditiveExpression = first:PrimaryExpression rest:(_ operator:AddOp _ right:PrimaryExpression {
+  return [operator, right];
+})* {
+  return additiveValue(first, rest);
+}
+
+PrimaryExpression = value:(Integer / Identifier) { return value; }
+
+Integer = [0-9]+ { return { kind: "integer", value: Number.parseInt(c.text, 10) } as IndentationAst; }
+
+Identifier = [a-zA-Z] [a-zA-Z0-9]* { return { kind: "identifier", name: c.text } as IndentationAst; }
+
+AddOp = ('+' / '-') { return c.text; }
+
+_ = [ \t]+
+
+EOL = _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
+
+Comment = "//" [^\r\n]*
+
+EOF = !.
+
+INDENTATION = spaces:<(' ')*> &{ return (spaces as string).length === c.data.indentation; }
+
+INDENT = {
+  c.data.indentation += 4;
+  return null;
+}
+
+DEDENT = {
+  c.data.indentation -= 4;
+  return null;
+}
