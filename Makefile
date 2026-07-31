@@ -10,11 +10,16 @@ BINDIR = ./bin
 EXAMPLES_DIR = $(ROOT)/examples
 GO_EXAMPLES_DIR = $(EXAMPLES_DIR)/go
 RUST_EXAMPLES_DIR = $(EXAMPLES_DIR)/rust
+HAXE_EXAMPLES_DIR = $(EXAMPLES_DIR)/haxe
+TYPESCRIPT_EXAMPLES_DIR = $(EXAMPLES_DIR)/typescript
+CSHARP_EXAMPLES_DIR = $(EXAMPLES_DIR)/csharp
+C_EXAMPLES_DIR = $(EXAMPLES_DIR)/c
 TEST_DIR = $(ROOT)/test
 
 # builder and ast packages
 BUILDER_DIR = $(ROOT)/builder
 BUILDER_SRC = $(BUILDER_DIR)/*.go
+TARGET_BUILDER_SRC = $(wildcard $(ROOT)/builder_*/*.go)
 AST_DIR = $(ROOT)/ast
 AST_SRC = $(AST_DIR)/*.go
 
@@ -46,13 +51,34 @@ RUST_EXAMPLE_GENERATED_SRC = \
 	$(RUST_EXAMPLES_DIR)/indentation/src/parser.rs \
 	$(RUST_EXAMPLES_DIR)/json/src/parser.rs \
 	$(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs
+HAXE_EXAMPLE_GENERATED_SRC = \
+	$(HAXE_EXAMPLES_DIR)/calculator/Parser.hx \
+	$(HAXE_EXAMPLES_DIR)/indentation/Parser.hx \
+	$(HAXE_EXAMPLES_DIR)/json/Parser.hx \
+	$(HAXE_EXAMPLES_DIR)/predicate_code/Parser.hx \
+	$(HAXE_EXAMPLES_DIR)/words/Parser.hx
+TYPESCRIPT_EXAMPLE_GENERATED_SRC = \
+	$(TYPESCRIPT_EXAMPLES_DIR)/calculator/parser.ts \
+	$(TYPESCRIPT_EXAMPLES_DIR)/indentation/parser.ts \
+	$(TYPESCRIPT_EXAMPLES_DIR)/json/parser.ts \
+	$(TYPESCRIPT_EXAMPLES_DIR)/predicate_code/parser.ts \
+	$(TYPESCRIPT_EXAMPLES_DIR)/words/parser.ts
+CSHARP_EXAMPLE_GENERATED_SRC = \
+	$(CSHARP_EXAMPLES_DIR)/calculator/Parser.cs \
+	$(CSHARP_EXAMPLES_DIR)/indentation/Parser.cs \
+	$(CSHARP_EXAMPLES_DIR)/json/Parser.cs \
+	$(CSHARP_EXAMPLES_DIR)/predicate_code/Parser.cs \
+	$(CSHARP_EXAMPLES_DIR)/words/Parser.cs
+C_EXAMPLE_GENERATED_SRC = $(C_EXAMPLES_DIR)/words/parser.c
 
 all: $(BUILDER_DIR)/generated_static_code.go $(BINDIR)/static_code_generator \
 	$(BUILDER_DIR)/generated_static_code_range_table.go \
 	$(BINDIR)/bootstrap-build $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go \
 	$(BINDIR)/bootstrap-pigeon $(ROOT)/pigeon.go $(BINDIR)/pigeon \
 	$(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) \
-	$(RUST_EXAMPLE_GENERATED_SRC)
+	$(RUST_EXAMPLE_GENERATED_SRC) $(HAXE_EXAMPLE_GENERATED_SRC) \
+	$(TYPESCRIPT_EXAMPLE_GENERATED_SRC) $(CSHARP_EXAMPLE_GENERATED_SRC) \
+	$(C_EXAMPLE_GENERATED_SRC)
 
 $(BINDIR)/static_code_generator: $(STATICCODEGENERATOR_SRC)
 	go build -o $@ $(STATICCODEGENERATOR_DIR)
@@ -72,7 +98,7 @@ $(BINDIR)/bootstrap-pigeon: $(BOOTSTRAPPIGEON_SRC) \
 $(ROOT)/pigeon.go: $(BINDIR)/bootstrap-pigeon $(PIGEON_GRAMMAR)
 	$(BINDIR)/bootstrap-pigeon $(PIGEON_GRAMMAR) > $@
 
-$(BINDIR)/pigeon: $(ROOT_SRC) $(ROOT)/pigeon.go
+$(BINDIR)/pigeon: $(ROOT_SRC) $(ROOT)/pigeon.go $(TARGET_BUILDER_SRC)
 	go build -o $@ $(ROOT)
 
 $(BUILDER_DIR)/generated_static_code.go: $(BUILDER_DIR)/static_code.go $(BINDIR)/static_code_generator
@@ -114,6 +140,18 @@ $(RUST_EXAMPLES_DIR)/json/src/parser.rs: $(RUST_EXAMPLES_DIR)/json/json.peg $(BI
 
 $(RUST_EXAMPLES_DIR)/predicate_code/src/parser.rs: $(RUST_EXAMPLES_DIR)/predicate_code/predicate_code.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -t rust -o $@ $<
+
+$(HAXE_EXAMPLES_DIR)/%/Parser.hx: $(HAXE_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t hx -o $@ $<
+
+$(TYPESCRIPT_EXAMPLES_DIR)/%/parser.ts: $(TYPESCRIPT_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t ts -o $@ $<
+
+$(CSHARP_EXAMPLES_DIR)/%/Parser.cs: $(CSHARP_EXAMPLES_DIR)/%/%.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t cs -o $@ $<
+
+$(C_EXAMPLES_DIR)/words/parser.c: $(C_EXAMPLES_DIR)/words/words.peg $(BINDIR)/pigeon
+	$(BINDIR)/pigeon -t c -o $@ $<
 
 $(TEST_DIR)/andnot/andnot.go: $(TEST_DIR)/andnot/andnot.peg $(BINDIR)/pigeon
 	$(BINDIR)/pigeon -nolint $< > $@
@@ -278,8 +316,11 @@ test:
 
 clean:
 	rm -f $(BUILDER_DIR)/generated_static_code.go $(BUILDER_DIR)/generated_static_code_range_table.go
-	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) $(RUST_EXAMPLE_GENERATED_SRC) $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
+	rm -f $(BOOTSTRAPPIGEON_DIR)/bootstrap_pigeon.go $(ROOT)/pigeon.go $(TEST_GENERATED_SRC) $(GO_EXAMPLE_GENERATED_SRC) $(RUST_EXAMPLE_GENERATED_SRC) $(HAXE_EXAMPLE_GENERATED_SRC) $(TYPESCRIPT_EXAMPLE_GENERATED_SRC) $(CSHARP_EXAMPLE_GENERATED_SRC) $(C_EXAMPLE_GENERATED_SRC) $(TEST_DIR)/staterestore/optimized/staterestore.go $(TEST_DIR)/staterestore/standard/staterestore.go $(TEST_DIR)/issue_65/optimized/issue_65.go $(TEST_DIR)/issue_65/optimized-grammar/issue_65.go
 	rm -rf $(RUST_EXAMPLES_DIR)/target
+	rm -f $(HAXE_EXAMPLES_DIR)/*/main.js
+	rm -rf $(TYPESCRIPT_EXAMPLES_DIR)/*/dist $(CSHARP_EXAMPLES_DIR)/*/bin $(CSHARP_EXAMPLES_DIR)/*/obj
+	rm -f $(C_EXAMPLES_DIR)/words/words $(C_EXAMPLES_DIR)/words/words.exe
 	rm -rf $(BINDIR)
 
 .PHONY: all clean lint cmp test

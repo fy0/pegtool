@@ -6,6 +6,12 @@
 pigeon
 bin/
 examples/rust/target/
+examples/haxe/**/main.js
+examples/typescript/**/dist/
+examples/csharp/**/bin/
+examples/csharp/**/obj/
+examples/c/*/words
+examples/c/*/*.exe
 bootstrap/cmd/bootstrap-pigeon/bootstrap-pigeon
 bootstrap/cmd/bootstrap-build/bootstrap-build
 bootstrap/cmd/pegscan/pegscan
