@@ -1252,7 +1252,7 @@ class Parser {
 		if (!code.notSkip && this.checkSkipCode()) {
 			return {val: null, ok: true};
 		}
-		return {val: code.run(this), ok: false};
+		return {val: code.run(this), ok: true};
 	}
 
 	function parseLitMatcher(lit:LitMatcher):RetValOk {

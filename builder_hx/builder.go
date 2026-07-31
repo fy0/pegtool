@@ -270,6 +270,20 @@ class ParserCustomData {
 		b.Writelnf("}")
 	}
 
+	b.Shims.WriteAndCodeExpr = func(b *base.Builder, expr *ast.AndCodeExpr) {
+		if expr == nil {
+			b.WriteNilLine()
+			return
+		}
+		if expr.FuncIx == 0 {
+			expr.FuncIx = b.ExprIndex
+		}
+		b.WriteExprBlock("andCodeExpr", false, func() {
+			b.WriteRulePos(expr.Pos())
+			b.WriteFieldf("run: _call%s,", b.Shims.FuncName(b, expr.FuncIx))
+		})
+	}
+
 	b.Shims.WriteActionExpr = func(b *base.Builder, act *ast.ActionExpr) {
 		if act == nil {
 			b.WriteNilLine()
@@ -283,6 +297,21 @@ class ParserCustomData {
 			b.WritelnFieldf("run: _call%s,", b.Shims.FuncName(b, act.FuncIx))
 			b.WriteFieldf("expr: ")
 			b.WriteExpr(act.Expr)
+		})
+	}
+
+	b.Shims.WriteCodeExpr = func(b *base.Builder, expr *ast.CodeExpr) {
+		if expr == nil {
+			b.WriteNilLine()
+			return
+		}
+		if expr.FuncIx == 0 {
+			expr.FuncIx = b.ExprIndex
+		}
+		b.WriteExprBlock("codeExpr", false, func() {
+			b.WriteRulePos(expr.Pos())
+			b.WriteFieldf("run: _call%s,", b.Shims.FuncName(b, expr.FuncIx))
+			b.WriteFieldf("notSkip: %v,", expr.NotSkip)
 		})
 	}
 
@@ -377,6 +406,20 @@ class ParserCustomData {
 			b.WriteFieldf("expr: ")
 			b.WriteExpr(lab.Expr)
 			b.WritelnFieldf("textCapture: %v,", lab.TextCapture)
+		})
+	}
+
+	b.Shims.WriteNotCodeExpr = func(b *base.Builder, expr *ast.NotCodeExpr) {
+		if expr == nil {
+			b.WriteNilLine()
+			return
+		}
+		if expr.FuncIx == 0 {
+			expr.FuncIx = b.ExprIndex
+		}
+		b.WriteExprBlock("notCodeExpr", false, func() {
+			b.WriteRulePos(expr.Pos())
+			b.WriteFieldf("run: _call%s,", b.Shims.FuncName(b, expr.FuncIx))
 		})
 	}
 
