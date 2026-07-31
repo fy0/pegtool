@@ -1,0 +1,158 @@
+{
+enum IndentationAst {
+	AstProgram(statements:Array<IndentationAst>, returnName:String);
+	AstAssignment(name:String, value:IndentationAst);
+	AstIf(condition:IndentationAst, statements:Array<IndentationAst>);
+	AstInteger(value:Int);
+	AstIdentifier(name:String);
+	AstAdd(left:IndentationAst, op:String, right:IndentationAst);
+}
+
+class ParserCustomData {
+	public var indentation:Int = 0;
+	public function new() {}
+}
+
+class IndentationSupport {
+	static function ast(value:Dynamic):IndentationAst {
+		return cast value;
+	}
+
+	public static function statements(values:Dynamic):Array<IndentationAst> {
+		if (values == null) return [];
+		return cast values;
+	}
+
+	public static function program(statements:Dynamic, returnValue:Dynamic):IndentationAst {
+		return AstProgram(cast statements, identifierName(returnValue));
+	}
+
+	public static function assignment(name:Dynamic, value:Dynamic):IndentationAst {
+		return AstAssignment(identifierName(name), ast(value));
+	}
+
+	public static function ifStatement(condition:Dynamic, body:Dynamic):IndentationAst {
+		return AstIf(ast(condition), cast body);
+	}
+
+	public static function additive(first:Dynamic, rest:Dynamic):IndentationAst {
+		var result = ast(first);
+		var items:Array<Dynamic> = rest == null ? [] : cast rest;
+		for (item in items) {
+			var pair:Array<Dynamic> = cast item;
+			result = AstAdd(result, Std.string(pair[0]), ast(pair[1]));
+		}
+		return result;
+	}
+
+	static function identifierName(value:Dynamic):String {
+		return switch (ast(value)) {
+			case AstIdentifier(name): name;
+			default: throw "expected identifier";
+		}
+	}
+
+	static function evaluateExpression(value:IndentationAst, variables:Map<String, Int>):Int {
+		return switch (value) {
+			case AstInteger(number): number;
+			case AstIdentifier(name):
+				if (!variables.exists(name)) throw 'identifier ${name} is not defined';
+				variables.get(name);
+			case AstAdd(left, op, right):
+				var leftValue = evaluateExpression(left, variables);
+				var rightValue = evaluateExpression(right, variables);
+				switch (op) {
+					case "+": leftValue + rightValue;
+					case "-": leftValue - rightValue;
+					default: throw 'unknown operator ${op}';
+				}
+			default: throw "expected expression";
+		}
+	}
+
+	static function executeStatements(statements:Array<IndentationAst>, variables:Map<String, Int>):Void {
+		for (statement in statements) {
+			switch (statement) {
+				case AstAssignment(name, value):
+					variables.set(name, evaluateExpression(value, variables));
+				case AstIf(condition, body):
+					if (evaluateExpression(condition, variables) != 0) executeStatements(body, variables);
+				default: throw "expected statement";
+			}
+		}
+	}
+
+	public static function execute(value:Dynamic):Int {
+		return switch (ast(value)) {
+			case AstProgram(statements, returnName):
+				var variables = new Map<String, Int>();
+				executeStatements(statements, variables);
+				if (!variables.exists(returnName)) throw 'identifier ${returnName} is not defined';
+				variables.get(returnName);
+			default: throw "expected program";
+		}
+	}
+}
+}
+
+Input = &{
+	c.data.indentation = 0;
+	return true;
+} statements:Statements returnValue:ReturnOp EOF {
+	return IndentationSupport.program(statements, returnValue);
+}
+
+Statements = values:Line+ { return IndentationSupport.statements(values); }
+
+Line = INDENTATION statement:Statement { return statement; }
+
+ReturnOp = "return" _ value:Identifier EOL { return value; }
+
+Statement = assignment:Assignment EOL { return assignment; }
+    / "if" _ condition:LogicalExpression _? ":" EOL INDENT body:Statements DEDENT {
+	return IndentationSupport.ifStatement(condition, body);
+}
+
+Assignment = name:Identifier _? "=" _? value:AdditiveExpression {
+	return IndentationSupport.assignment(name, value);
+}
+
+LogicalExpression = value:PrimaryExpression { return value; }
+
+AdditiveExpression = first:PrimaryExpression rest:(_ op:AddOp _ right:PrimaryExpression {
+	return [op, right];
+})* {
+	return IndentationSupport.additive(first, rest);
+}
+
+PrimaryExpression = value:(Integer / Identifier) { return value; }
+
+Integer = [0-9]+ {
+	var value = Std.parseInt(c.text);
+	if (value == null) throw 'invalid integer ${c.text}';
+	return AstInteger(value);
+}
+
+Identifier = [a-zA-Z] [a-zA-Z0-9]* { return AstIdentifier(c.text); }
+
+AddOp = ('+' / '-') { return c.text; }
+
+_ = [ \t]+
+
+EOL = _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
+
+Comment = "//" [^\r\n]*
+
+EOF = !.
+
+INDENTATION = spaces:<(' ')*> &{ return Std.string(spaces).length == c.data.indentation; }
+
+INDENT = {
+	c.data.indentation += 4;
+	return null;
+}
+
+DEDENT = {
+	c.data.indentation -= 4;
+	return null;
+}

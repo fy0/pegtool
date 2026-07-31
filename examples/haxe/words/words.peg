@@ -1,0 +1,16 @@
+{
+class ParserCustomData {
+	public function new() {}
+}
+}
+
+start = first:word rest:("," next:word { return next; })* !. {
+	var values:Array<String> = [Std.string(first)];
+	var tail:Array<Dynamic> = cast rest;
+	for (item in tail) {
+		values.push(Std.string(item));
+	}
+	return values;
+}
+
+word = [\p{L}]+ { return c.text; }

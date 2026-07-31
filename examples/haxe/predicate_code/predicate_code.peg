@@ -1,0 +1,15 @@
+{
+class ParserCustomData {
+	public function new() {}
+}
+
+class OperatorSupport {
+	public static function contains(value:Dynamic):Bool {
+		return ["+", "%"].indexOf(Std.string(value)) >= 0;
+	}
+}
+}
+
+op = value:<[^ \n\t\ra-zA-Z0-9]+>
+	&{ return OperatorSupport.contains(value); }
+	{ return c.text; }

@@ -1,0 +1,55 @@
+{
+class ParserCustomData {
+	public function new() {}
+}
+
+class CalculatorSupport {
+	public static function evaluate(first:Dynamic, rest:Dynamic):Int {
+		var result:Int = cast first;
+		var items:Array<Dynamic> = rest == null ? [] : cast rest;
+		for (item in items) {
+			var pair:Array<Dynamic> = cast item;
+			var right:Int = cast pair[1];
+			switch (Std.string(pair[0])) {
+				case "+": result += right;
+				case "-": result -= right;
+				case "*": result *= right;
+				case "/": result = Std.int(result / right);
+				default: throw 'unknown operator ${Std.string(pair[0])}';
+			}
+		}
+		return result;
+	}
+}
+}
+
+Input = expression:Expr EOF { return expression; }
+
+Expr = _ first:Term rest:( _ op:AddOp _ right:Term {
+	return [op, right];
+})* _ {
+	return CalculatorSupport.evaluate(first, rest);
+}
+
+Term = first:Factor rest:( _ op:MulOp _ right:Factor {
+	return [op, right];
+})* {
+	return CalculatorSupport.evaluate(first, rest);
+}
+
+Factor = '(' expression:Expr ')' { return expression; }
+       / integer:Integer { return integer; }
+
+AddOp = ('+' / '-') { return c.text; }
+
+MulOp = ('*' / '/') { return c.text; }
+
+Integer = '-'? [0-9]+ {
+	var value = Std.parseInt(c.text);
+	if (value == null) throw 'invalid integer ${c.text}';
+	return value;
+}
+
+_ "whitespace" = [ \n\t\r]*
+
+EOF = !.

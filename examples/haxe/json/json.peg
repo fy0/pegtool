@@ -1,0 +1,96 @@
+{
+class ParserCustomData {
+	public function new() {}
+}
+
+class JsonSupport {
+	public static function objectValue(members:Dynamic):Dynamic {
+		var result:haxe.DynamicAccess<Dynamic> = {};
+		if (members == null) return result;
+		var values:Array<Dynamic> = cast members;
+		insertMember(result, cast values[0]);
+		var rest:Array<Dynamic> = values[1] == null ? [] : cast values[1];
+		for (member in rest) insertMember(result, cast member);
+		return result;
+	}
+
+	static function insertMember(result:haxe.DynamicAccess<Dynamic>, pair:Array<Dynamic>):Void {
+		result.set(Std.string(pair[0]), pair[1]);
+	}
+
+	public static function arrayValue(values:Dynamic):Array<Dynamic> {
+		var result:Array<Dynamic> = [];
+		if (values == null) return result;
+		var group:Array<Dynamic> = cast values;
+		var first:Array<Dynamic> = cast group[0];
+		result.push(first[0]);
+		var rest:Array<Dynamic> = group[1] == null ? [] : cast group[1];
+		for (item in rest) {
+			var wrapped:Array<Dynamic> = cast item;
+			result.push(wrapped[0]);
+		}
+		return result;
+	}
+}
+}
+
+JSON = _ value:Value EOF { return value; }
+
+Value = value:(Object / Array / Number / String / Bool / Null) _ { return value; }
+
+Object = '{' _ members:(first:Member rest:(',' _ member:Member {
+	return member;
+})* {
+	return [first, rest];
+})? '}' {
+	return JsonSupport.objectValue(members);
+}
+
+Member = key:String _ ':' _ value:Value { return [key, value]; }
+
+Array = '[' _ values:(first:(value:Value {
+	return [value];
+}) rest:(',' _ value:Value {
+	return [value];
+})* {
+	return [first, rest];
+})? ']' {
+	return JsonSupport.arrayValue(values);
+}
+
+Number = '-'? Integer ('.' DecimalDigit+)? Exponent? {
+	var value = Std.parseFloat(c.text);
+	if (Math.isNaN(value)) throw 'invalid number ${c.text}';
+	return value;
+}
+
+Integer = '0' / NonZeroDecimalDigit DecimalDigit*
+
+Exponent = 'e'i [+-]? DecimalDigit+
+
+String = '"' (!EscapedChar . / '\\' EscapeSequence)* '"' {
+	return haxe.Json.parse(c.text);
+}
+
+EscapedChar = [\x00-\x1f"\\]
+
+EscapeSequence = SingleCharEscape / UnicodeEscape
+
+SingleCharEscape = ["\\/bfnrt]
+
+UnicodeEscape = 'u' HexDigit HexDigit HexDigit HexDigit
+
+DecimalDigit = [0-9]
+
+NonZeroDecimalDigit = [1-9]
+
+HexDigit = [0-9a-f]i
+
+Bool = "true" { return true; }
+     / "false" { return false; }
+
+Null = "null" { return null; }
+
+_ "whitespace" = [ \t\r\n]*
+
+EOF = !.
