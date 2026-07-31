@@ -81,9 +81,9 @@ function debug(b:Bool):Option {
 }
 
 // Memoize creates an Option to set the memoize flag to b. When set to true,
-// the parser will cache all results so each expression is evaluated only
-// once. This guarantees linear parsing time even for pathological cases,
-// at the expense of more memory and slower times for typical cases.
+// the parser caches named rule results by source position and parse mode.
+// This avoids repeated named-rule evaluation during backtracking at the
+// expense of additional memory.
 //
 // The default is false.
 function memoize(b:Bool):Option {
@@ -513,8 +513,8 @@ class Parser {
 	// ==template== {{ if not .Optimize }}
 	// Memoization tables indexed directly by source offset. Lookahead parsing
 	// uses a separate table because actions are skipped there.
-	public var memo1:Array<Map<Any, ResultTuple>>;
-	public var memo2:Array<Map<Any, ResultTuple>>;
+	public var memo1:Array<Map<String, ResultTuple>>;
+	public var memo2:Array<Map<String, ResultTuple>>;
 
 	// {{ end }} ==template==
 	// rules table, maps the rule identifier to the rule node
@@ -788,17 +788,17 @@ class Parser {
 	}
 
 	// ==template== {{ if not .Optimize }}
-	function getMemoized(node:Any):ResultTuple {
+	function getMemoizedRule(rule:Rule):ResultTuple {
 		var memo = this.checkSkipCode() ? this.memo2 : this.memo1;
 		if (memo == null) {
 			return null;
 		}
 		var entries = memo[this.pt.offset];
-		return entries == null ? null : entries[node];
+		return entries == null ? null : entries[rule.name];
 	}
 
-	function setMemoized(pt:Savepoint, node:Any, val:Any, ok:Bool, end:Savepoint) {
-		var memo:Array<Map<Any, ResultTuple>>;
+	function setMemoizedRule(pt:Savepoint, rule:Rule, val:Any, ok:Bool, end:Savepoint) {
+		var memo:Array<Map<String, ResultTuple>>;
 		if (this.checkSkipCode()) {
 			if (this.memo2 == null) {
 				this.memo2 = [];
@@ -812,12 +812,12 @@ class Parser {
 		}
 		var entries = memo[pt.offset];
 		if (entries == null) {
-			entries = new Map<Any, ResultTuple>();
+			entries = new Map<String, ResultTuple>();
 			memo[pt.offset] = entries;
 		}
-		var result = entries[node];
+		var result = entries[rule.name];
 		if (result == null) {
-			entries[node] = {v: val, b: ok, end: savepointClone(end)};
+			entries[rule.name] = {v: val, b: ok, end: savepointClone(end)};
 		} else {
 			result.v = val;
 			result.b = ok;
@@ -920,20 +920,17 @@ class Parser {
 
 	// ==template== {{ if not .Optimize }}
 	function parseRuleMemoize(rule:Rule):RetValOk {
-		var result = this.getMemoized(rule);
+		var result = this.getMemoizedRule(rule);
 		if (result != null) {
 			this.restore(savepointClone(result.end));
-			return {
-				val: result.v,
-				ok: result.b,
-			}
+			return {val: result.v, ok: result.b};
 		}
 
 		var startMark = savepointClone(this.pt);
-		var ret2 = this.parseRule(rule);
-		this.setMemoized(startMark, rule, ret2.val, ret2.ok, this.pt);
+		var ret = this.parseRule(rule);
+		this.setMemoizedRule(startMark, rule, ret.val, ret.ok, this.pt);
 
-		return ret2;
+		return ret;
 	}
 	// {{ end }} ==template==
 
@@ -1004,25 +1001,7 @@ class Parser {
 
 	// ==template== {{ if .NeedExprWrap }}
 	function parseExprWrap(expr:AllExpr):RetValOk {
-		// ==template== {{ if not .Optimize }}
-		var pt = savepointClone(this.pt);
-		if (this.memoize) {
-			var result = this.getMemoized(expr);
-			if (result != null) {
-				this.restore(savepointClone(result.end));
-				return {val: result.v, ok: result.b};
-			}
-		}
-		// {{ end }} ==template==
-
-		var ret = this.parseExpr(expr);
-
-		// ==template== {{ if not .Optimize }}
-		if (this.memoize) {
-			this.setMemoized(pt, expr, ret.val, ret.ok, this.pt);
-		}
-		// {{ end }} ==template==
-		return ret;
+		return this.parseExpr(expr);
 	}
 	// {{ end }} ==template==
 
