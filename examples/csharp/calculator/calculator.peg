@@ -1,0 +1,47 @@
+{
+private static int Evaluate(object? first, object? rest)
+{
+    var result = (int)first!;
+    foreach (var item in (List<object?>?)rest ?? new List<object?>())
+    {
+        var pair = (List<object?>)item!;
+        var right = (int)pair[1]!;
+        result = (string)pair[0]! switch
+        {
+            "+" => result + right,
+            "-" => result - right,
+            "*" => result * right,
+            "/" => result / right,
+            var value => throw new InvalidOperationException("unknown operator " + value),
+        };
+    }
+    return result;
+}
+}
+
+Input = expression:Expr EOF { return expression; }
+
+Expr = _ first:Term rest:( _ operator:AddOp _ right:Term {
+    return new List<object?> { @operator, right };
+})* _ {
+    return Evaluate(first, rest);
+}
+
+Term = first:Factor rest:( _ operator:MulOp _ right:Factor {
+    return new List<object?> { @operator, right };
+})* {
+    return Evaluate(first, rest);
+}
+
+Factor = '(' expression:Expr ')' { return expression; }
+       / integer:Integer { return integer; }
+
+AddOp = ('+' / '-') { return c.Text; }
+
+MulOp = ('*' / '/') { return c.Text; }
+
+Integer = '-'? [0-9]+ { return int.Parse(c.Text); }
+
+_ "whitespace" = [ \n\t\r]*
+
+EOF = !.

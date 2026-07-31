@@ -1,0 +1,91 @@
+{
+private static Dictionary<string, object?> ObjectValue(object? members)
+{
+    var result = new Dictionary<string, object?>();
+    if (members == null) return result;
+    var values = (List<object?>)members;
+    InsertMember(result, (List<object?>)values[0]!);
+    foreach (var member in (List<object?>?)values[1] ?? new List<object?>())
+    {
+        InsertMember(result, (List<object?>)member!);
+    }
+    return result;
+}
+
+private static void InsertMember(Dictionary<string, object?> result, List<object?> pair)
+{
+    result[(string)pair[0]!] = pair[1];
+}
+
+private static List<object?> ArrayValue(object? values)
+{
+    var result = new List<object?>();
+    if (values == null) return result;
+    var group = (List<object?>)values;
+    result.Add(((List<object?>)group[0]!)[0]);
+    foreach (var item in (List<object?>?)group[1] ?? new List<object?>())
+    {
+        result.Add(((List<object?>)item!)[0]);
+    }
+    return result;
+}
+}
+
+JSON = _ value:Value EOF { return value; }
+
+Value = value:(Object / Array / Number / String / Bool / Null) _ { return value; }
+
+Object = '{' _ members:(first:Member rest:(',' _ member:Member {
+    return member;
+})* {
+    return new List<object?> { first, rest };
+})? '}' {
+    return ObjectValue(members);
+}
+
+Member = key:String _ ':' _ value:Value { return new List<object?> { key, value }; }
+
+Array = '[' _ values:(first:(value:Value {
+    return new List<object?> { value };
+}) rest:(',' _ value:Value {
+    return new List<object?> { value };
+})* {
+    return new List<object?> { first, rest };
+})? ']' {
+    return ArrayValue(values);
+}
+
+Number = '-'? Integer ('.' DecimalDigit+)? Exponent? {
+    return double.Parse(c.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+}
+
+Integer = '0' / NonZeroDecimalDigit DecimalDigit*
+
+Exponent = 'e'i [+-]? DecimalDigit+
+
+String = '"' (!EscapedChar . / '\\' EscapeSequence)* '"' {
+    return System.Text.Json.JsonSerializer.Deserialize<string>(c.Text)!;
+}
+
+EscapedChar = [\x00-\x1f"\\]
+
+EscapeSequence = SingleCharEscape / UnicodeEscape
+
+SingleCharEscape = ["\\/bfnrt]
+
+UnicodeEscape = 'u' HexDigit HexDigit HexDigit HexDigit
+
+DecimalDigit = [0-9]
+
+NonZeroDecimalDigit = [1-9]
+
+HexDigit = [0-9a-f]i
+
+Bool = "true" { return true; }
+     / "false" { return false; }
+
+Null = "null" { return null; }
+
+_ "whitespace" = [ \t\r\n]*
+
+EOF = !.

@@ -1,0 +1,160 @@
+{
+public sealed class IndentationData
+{
+    public int Indentation { get; set; }
+}
+
+private abstract record IndentationAst;
+private sealed record ProgramAst(List<IndentationAst> Statements, string ReturnName) : IndentationAst;
+private sealed record AssignmentAst(string Name, IndentationAst Value) : IndentationAst;
+private sealed record IfAst(IndentationAst Condition, List<IndentationAst> Statements) : IndentationAst;
+private sealed record IntegerAst(int Value) : IndentationAst;
+private sealed record IdentifierAst(string Name) : IndentationAst;
+private sealed record AddAst(IndentationAst Left, string Operator, IndentationAst Right) : IndentationAst;
+
+private static IndentationAst Ast(object? value) => (IndentationAst)value!;
+
+private static List<IndentationAst> StatementsValue(object? values)
+{
+    if (values == null) return new List<IndentationAst>();
+    return ((List<object?>)values).Select(Ast).ToList();
+}
+
+private static string IdentifierName(object? value)
+{
+    return Ast(value) is IdentifierAst identifier
+        ? identifier.Name
+        : throw new InvalidOperationException("expected identifier");
+}
+
+private static IndentationAst ProgramValue(object? statements, object? returnValue)
+{
+    return new ProgramAst(StatementsValue(statements), IdentifierName(returnValue));
+}
+
+private static IndentationAst AssignmentValue(object? name, object? value)
+{
+    return new AssignmentAst(IdentifierName(name), Ast(value));
+}
+
+private static IndentationAst IfValue(object? condition, object? body)
+{
+    return new IfAst(Ast(condition), StatementsValue(body));
+}
+
+private static IndentationAst AdditiveValue(object? first, object? rest)
+{
+    var result = Ast(first);
+    foreach (var item in (List<object?>?)rest ?? new List<object?>())
+    {
+        var pair = (List<object?>)item!;
+        result = new AddAst(result, (string)pair[0]!, Ast(pair[1]));
+    }
+    return result;
+}
+
+private static int EvaluateExpression(IndentationAst value, Dictionary<string, int> variables)
+{
+    return value switch
+    {
+        IntegerAst integer => integer.Value,
+        IdentifierAst identifier => variables.TryGetValue(identifier.Name, out var result)
+            ? result
+            : throw new InvalidOperationException("identifier " + identifier.Name + " is not defined"),
+        AddAst add when add.Operator == "+" => EvaluateExpression(add.Left, variables) + EvaluateExpression(add.Right, variables),
+        AddAst add when add.Operator == "-" => EvaluateExpression(add.Left, variables) - EvaluateExpression(add.Right, variables),
+        AddAst add => throw new InvalidOperationException("unknown operator " + add.Operator),
+        _ => throw new InvalidOperationException("expected expression"),
+    };
+}
+
+private static void ExecuteStatements(IEnumerable<IndentationAst> statements, Dictionary<string, int> variables)
+{
+    foreach (var statement in statements)
+    {
+        switch (statement)
+        {
+            case AssignmentAst assignment:
+                variables[assignment.Name] = EvaluateExpression(assignment.Value, variables);
+                break;
+            case IfAst conditional when EvaluateExpression(conditional.Condition, variables) != 0:
+                ExecuteStatements(conditional.Statements, variables);
+                break;
+            case IfAst:
+                break;
+            default:
+                throw new InvalidOperationException("expected statement");
+        }
+    }
+}
+
+public static int Execute(object? value)
+{
+    if (Ast(value) is not ProgramAst program) throw new InvalidOperationException("expected program");
+    var variables = new Dictionary<string, int>();
+    ExecuteStatements(program.Statements, variables);
+    return variables.TryGetValue(program.ReturnName, out var result)
+        ? result
+        : throw new InvalidOperationException("identifier " + program.ReturnName + " is not defined");
+}
+}
+
+Input = &{
+    ((IndentationData)c.Data).Indentation = 0;
+    return true;
+} values:Statements returnValue:ReturnOp EOF {
+    return ProgramValue(values, returnValue);
+}
+
+Statements = values:Line+ { return values; }
+
+Line = INDENTATION statement:Statement { return statement; }
+
+ReturnOp = "return" _ value:Identifier EOL { return value; }
+
+Statement = assignment:Assignment EOL { return assignment; }
+    / "if" _ condition:LogicalExpression _? ":" EOL INDENT body:Statements DEDENT {
+    return IfValue(condition, body);
+}
+
+Assignment = name:Identifier _? "=" _? value:AdditiveExpression {
+    return AssignmentValue(name, value);
+}
+
+LogicalExpression = value:PrimaryExpression { return value; }
+
+AdditiveExpression = first:PrimaryExpression rest:(_ operator:AddOp _ right:PrimaryExpression {
+    return new List<object?> { @operator, right };
+})* {
+    return AdditiveValue(first, rest);
+}
+
+PrimaryExpression = value:(Integer / Identifier) { return value; }
+
+Integer = [0-9]+ { return new IntegerAst(int.Parse(c.Text)); }
+
+Identifier = [a-zA-Z] [a-zA-Z0-9]* { return new IdentifierAst(c.Text); }
+
+AddOp = ('+' / '-') { return c.Text; }
+
+_ = [ \t]+
+
+EOL = _? Comment? ("\r\n" / "\n\r" / "\r" / "\n" / EOF)
+
+Comment = "//" [^\r\n]*
+
+EOF = !.
+
+INDENTATION = spaces:<(' ')*> &{
+    return ((string)spaces!).Length == ((IndentationData)c.Data).Indentation;
+}
+
+INDENT = {
+    ((IndentationData)c.Data).Indentation += 4;
+    return null;
+}
+
+DEDENT = {
+    ((IndentationData)c.Data).Indentation -= 4;
+    return null;
+}

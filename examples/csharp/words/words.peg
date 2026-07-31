@@ -1,0 +1,13 @@
+{
+private const string ExampleName = "words";
+}
+
+start = first:word rest:("," next:word { return next; })* !. {
+    var values = new List<string> { (string)first! };
+    foreach (var item in (List<object?>?)rest ?? new List<object?>()) {
+        values.Add((string)item!);
+    }
+    return values;
+}
+
+word = [\p{L}]+ { return c.Text; }

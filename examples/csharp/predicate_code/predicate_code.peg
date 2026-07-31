@@ -1,0 +1,7 @@
+{
+private static readonly HashSet<string> Operators = new HashSet<string> { "+", "%" };
+}
+
+op = value:<[^ \n\t\ra-zA-Z0-9]+>
+    &{ return Operators.Contains((string)value!); }
+    { return c.Text; }
